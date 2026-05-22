@@ -32,7 +32,7 @@ export default function Login() {
           alt="Taguig city background"
           className="h-full w-full object-cover opacity-100"
         />
-        <div className="absolute inset-0 bg-black/35" />
+        <div className="absolute inset-0 bg-black/15" />
       </div>
 
       <div className="relative z-10 min-h-screen flex items-center justify-center px-4 py-8">
@@ -123,4 +123,4 @@ export default function Login() {
       </div>
     </div>
   )
-}
+}

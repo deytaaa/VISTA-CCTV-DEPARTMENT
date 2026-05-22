@@ -1,0 +1,143 @@
+{
+  "info": {
+    "name": "VISTA CCTV Backend",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Simple Postman collection to exercise the backend API endpoints. Replace variables before use."
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:4000",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/health"
+      }
+    },
+    {
+      "name": "Generate JO Number",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {},
+        "url": "{{baseUrl}}/api/jo/generate"
+      }
+    },
+    {
+      "name": "Create Job Order",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"location\": \"Main Hall\",\n  \"requestor_name\": \"John Doe\",\n  \"items\": [{\n    \"item_name\": \"Camera\",\n    \"quantity\": 1\n  }],\n  \"personnel\": [{\n    \"name\": \"Technician A\"\n  }]\n}"
+        },
+        "url": "{{baseUrl}}/api/job-orders"
+      }
+    },
+    {
+      "name": "List Job Orders",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "url": "{{baseUrl}}/api/job-orders"
+      }
+    },
+    {
+      "name": "Get Job Order by ID",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "url": "{{baseUrl}}/api/job-orders/:id"
+      }
+    },
+    {
+      "name": "Delete Job Order",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "url": "{{baseUrl}}/api/job-orders/:id"
+      }
+    },
+    {
+      "name": "Create Item",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "body": { "mode": "raw", "raw": "{\n  \"job_order_id\": \"<job_order_id>\",\n  \"item_no\": 1,\n  \"item_name\": \"Cable\",\n  \"quantity\": 2\n}" },
+        "url": "{{baseUrl}}/api/items"
+      }
+    },
+    {
+      "name": "Create Personnel",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "body": { "mode": "raw", "raw": "{\n  \"job_order_id\": \"<job_order_id>\",\n  \"personnel_no\": 1,\n  \"name\": \"Technician B\"\n}" },
+        "url": "{{baseUrl}}/api/personnel"
+      }
+    },
+    {
+      "name": "Create Completion",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "body": { "mode": "raw", "raw": "{\n  \"job_order_id\": \"<job_order_id>\",\n  \"remarks\": \"Work completed\",\n  \"proof_file\": \"signed-proof.pdf\",\n  \"completed_by\": \"<user_id>\"\n}" },
+        "url": "{{baseUrl}}/api/completion"
+      }
+    },
+    {
+      "name": "Approval Action",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "body": { "mode": "raw", "raw": "{\n  \"job_order_id\": \"<job_order_id>\",\n  \"action\": \"approve\",\n  \"approved_by\": \"<user_id>\"\n}" },
+        "url": "{{baseUrl}}/api/approval"
+      }
+    },
+    {
+      "name": "List Activity Logs",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "url": "{{baseUrl}}/api/logs"
+      }
+    }
+  ]
+}
