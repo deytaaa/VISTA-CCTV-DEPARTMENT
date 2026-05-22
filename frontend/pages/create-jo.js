@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import ProtectedRoute from '../components/ProtectedRoute'
+import Layout from '../components/layout/Layout'
 
 export default function CreateJO() {
   const [items, setItems] = useState([{ item_no: 1, item_name: '', reference_no: '', quantity: 1 }]);
@@ -19,10 +20,10 @@ export default function CreateJO() {
 
   return (
     <ProtectedRoute allowedRoles={['admin', 'dispatcher', 'supervisor']}>
-    <div className="min-h-screen bg-lightGrayBg p-6">
-      <div className="max-w-4xl mx-auto bg-white p-6 rounded shadow">
-        <h2 className="text-xl font-bold mb-4">Create Job Order</h2>
-        <form onSubmit={handleGenerate}>
+      <Layout title="Create Job Order" subtitle="Create JO">
+        <div className="max-w-4xl mx-auto bg-white p-6 rounded shadow">
+          <h2 className="text-xl font-bold mb-4">Create Job Order</h2>
+          <form onSubmit={handleGenerate}>
           <label className="block mb-2">Location</label>
           <input className="w-full p-2 border rounded mb-4" name="location" />
 
@@ -56,9 +57,9 @@ export default function CreateJO() {
             <button className="px-4 py-2 bg-taguigRed text-white rounded">Save as Draft</button>
             <button type="submit" className="px-4 py-2 bg-taguigDark text-white rounded">Generate JO</button>
           </div>
-        </form>
-      </div>
-    </div>
+          </form>
+        </div>
+      </Layout>
     </ProtectedRoute>
   )
 }
