@@ -33,12 +33,36 @@ module.exports = {
   me: async (req, res) => {
     try {
       if (!req.user || !req.user.id) return res.status(401).json({ error: 'Not authenticated' });
-      const { data, error } = await supabase.from('users').select('*').eq('id', req.user.id).single();
-      if (error) return res.status(500).json({ error: error.message || error });
-      return res.json({ data });
+      return res.json({
+        user: req.user,
+        authUser: req.authUser,
+        sessionTokenPresent: Boolean(req.sessionToken),
+      });
     } catch (err) {
       console.error(err);
       return res.status(500).json({ error: 'Failed to fetch profile' });
+    }
+  },
+
+  session: async (req, res) => {
+    try {
+      if (!req.authUser) return res.status(401).json({ error: 'Not authenticated' });
+
+      return res.json({
+        tokenPresent: Boolean(req.sessionToken),
+        tokenPreview: req.sessionToken ? `${req.sessionToken.slice(0, 12)}...` : null,
+        authUser: {
+          id: req.authUser.id,
+          email: req.authUser.email,
+          email_confirmed_at: req.authUser.email_confirmed_at,
+          last_sign_in_at: req.authUser.last_sign_in_at,
+        },
+        profile: req.authProfile,
+        user: req.user,
+      });
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ error: 'Failed to inspect session' });
     }
   },
 };

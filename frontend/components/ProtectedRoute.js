@@ -2,15 +2,21 @@ import { useEffect } from 'react'
 import { useRouter } from 'next/router'
 import { useAuth } from '../context/AuthContext'
 
-export default function ProtectedRoute({ children }) {
+export default function ProtectedRoute({ children, allowedRoles = null, redirectTo = '/access-denied' }) {
   const router = useRouter()
-  const { loading, isAuthenticated } = useAuth()
+  const { loading, isAuthenticated, role } = useAuth()
+  const hasRoleAccess = !Array.isArray(allowedRoles) || allowedRoles.length === 0 || allowedRoles.includes(role)
 
   useEffect(() => {
     if (!loading && !isAuthenticated) {
       router.replace(`/login?next=${encodeURIComponent(router.asPath)}`)
+      return
     }
-  }, [isAuthenticated, loading, router])
+
+    if (!loading && isAuthenticated && !hasRoleAccess) {
+      router.replace(`${redirectTo}?next=${encodeURIComponent(router.asPath)}`)
+    }
+  }, [hasRoleAccess, isAuthenticated, loading, redirectTo, router])
 
   if (loading) {
     return (
@@ -20,7 +26,7 @@ export default function ProtectedRoute({ children }) {
     )
   }
 
-  if (!isAuthenticated) {
+  if (!isAuthenticated || !hasRoleAccess) {
     return null
   }
 

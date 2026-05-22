@@ -18,7 +18,7 @@ export default function CreateJO() {
   }
 
   return (
-    <ProtectedRoute>
+    <ProtectedRoute allowedRoles={['admin', 'dispatcher', 'supervisor']}>
     <div className="min-h-screen bg-lightGrayBg p-6">
       <div className="max-w-4xl mx-auto bg-white p-6 rounded shadow">
         <h2 className="text-xl font-bold mb-4">Create Job Order</h2>
