@@ -2,7 +2,7 @@
   "/_app": "pages/_app.js",
   "/_error": "pages/_error.js",
   "/_document": "pages/_document.js",
+  "/create-jo": "pages/create-jo.js",
   "/": "pages/index.js",
-  "/login": "pages/login.js",
-  "/create-jo": "pages/create-jo.js"
+  "/login": "pages/login.js"
 }

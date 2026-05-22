@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import ProtectedRoute from '../components/ProtectedRoute'
 
 export default function CreateJO() {
   const [items, setItems] = useState([{ item_no: 1, item_name: '', reference_no: '', quantity: 1 }]);
@@ -17,6 +18,7 @@ export default function CreateJO() {
   }
 
   return (
+    <ProtectedRoute>
     <div className="min-h-screen bg-lightGrayBg p-6">
       <div className="max-w-4xl mx-auto bg-white p-6 rounded shadow">
         <h2 className="text-xl font-bold mb-4">Create Job Order</h2>
@@ -57,5 +59,6 @@ export default function CreateJO() {
         </form>
       </div>
     </div>
+    </ProtectedRoute>
   )
 }

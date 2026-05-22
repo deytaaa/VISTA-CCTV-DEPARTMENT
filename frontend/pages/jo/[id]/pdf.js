@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer'
 import { PDFDownloadLink } from '@react-pdf/renderer'
+import ProtectedRoute from '../../../components/ProtectedRoute'
 
 const styles = StyleSheet.create({
   page: { padding: 20 },
@@ -66,6 +67,7 @@ export default function JoPdfPage({ query }){
     personnel: [ { name: 'Technician A' } ]
   }
   return (
+    <ProtectedRoute>
     <div className="p-6">
       <h1 className="text-xl font-bold mb-4">JO PDF Preview</h1>
       {isClient ? (
@@ -78,5 +80,6 @@ export default function JoPdfPage({ query }){
         </button>
       )}
     </div>
+    </ProtectedRoute>
   )
 }

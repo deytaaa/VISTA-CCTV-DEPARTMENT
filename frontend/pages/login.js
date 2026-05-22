@@ -1,12 +1,23 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/router'
 import { supabase } from '../lib/supabaseClient'
+import { useAuth } from '../context/AuthContext'
 
 export default function Login() {
+  const router = useRouter()
+  const { isAuthenticated, loading: authLoading } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+
+  useEffect(() => {
+    if (!authLoading && isAuthenticated) {
+      const next = typeof router.query.next === 'string' ? router.query.next : '/'
+      router.replace(next)
+    }
+  }, [authLoading, isAuthenticated, router])
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -21,7 +32,16 @@ export default function Login() {
       return
     }
 
-    window.location.href = '/'
+    const next = typeof router.query.next === 'string' ? router.query.next : '/'
+    router.replace(next)
+  }
+
+  if (authLoading || isAuthenticated) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-white text-sm text-gray-500">
+        Loading session...
+      </div>
+    )
   }
 
   return (
