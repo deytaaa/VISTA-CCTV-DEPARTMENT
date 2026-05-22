@@ -14,7 +14,7 @@ export default function Login() {
 
   useEffect(() => {
     if (!authLoading && isAuthenticated) {
-      const next = typeof router.query.next === 'string' ? router.query.next : '/'
+      const next = typeof router.query.next === 'string' ? router.query.next : '/dashboard'
       router.replace(next)
     }
   }, [authLoading, isAuthenticated, router])
@@ -32,7 +32,7 @@ export default function Login() {
       return
     }
 
-    const next = typeof router.query.next === 'string' ? router.query.next : '/'
+    const next = typeof router.query.next === 'string' ? router.query.next : '/dashboard'
     router.replace(next)
   }
 
