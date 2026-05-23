@@ -5,53 +5,7 @@ import { useAuth } from '../../context/AuthContext'
 import Layout from '../layout/Layout'
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || ''
-
-const STATUS_OPTIONS = [
-  { value: 'all', label: 'All Statuses' },
-  { value: 'draft', label: 'Draft' },
-  { value: 'sent', label: 'Sent' },
-  { value: 'pending', label: 'Pending' },
-  { value: 'processing', label: 'Processing' },
-  { value: 'completed', label: 'Completed' },
-  { value: 'for_approval', label: 'For Approval' },
-  { value: 'approved', label: 'Approved' },
-  { value: 'rejected', label: 'Rejected' },
-  { value: 'archived', label: 'Archived' },
-]
-
-function statusLabel(status) {
-  return (status || 'draft').replace(/_/g, ' ')
-}
-
-function statusMeta(status) {
-  switch ((status || '').toLowerCase()) {
-    case 'draft':
-      return { label: 'Draft', className: 'bg-gray-100 text-gray-700 ring-gray-200' }
-    case 'sent':
-      return { label: 'Sent', className: 'bg-sky-100 text-sky-700 ring-sky-200' }
-    case 'pending':
-      return { label: 'Pending', className: 'bg-amber-100 text-amber-800 ring-amber-200' }
-    case 'processing':
-      return { label: 'Processing', className: 'bg-indigo-100 text-indigo-700 ring-indigo-200' }
-    case 'completed':
-      return { label: 'Completed', className: 'bg-emerald-100 text-emerald-700 ring-emerald-200' }
-    case 'for_approval':
-      return { label: 'For Approval', className: 'bg-orange-100 text-orange-800 ring-orange-200' }
-    case 'approved':
-      return { label: 'Approved', className: 'bg-green-100 text-green-700 ring-green-200' }
-    case 'rejected':
-      return { label: 'Rejected', className: 'bg-red-100 text-red-700 ring-red-200' }
-    case 'archived':
-      return { label: 'Archived', className: 'bg-slate-100 text-slate-700 ring-slate-200' }
-    default:
-      return { label: statusLabel(status), className: 'bg-gray-100 text-gray-700 ring-gray-200' }
-  }
-}
-
-function StatusBadge({ status }) {
-  const meta = statusMeta(status)
-  return <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ring-1 ${meta.className}`}>{meta.label}</span>
-}
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
 
 function EmptyState() {
   return (
@@ -62,20 +16,18 @@ function EmptyState() {
           <circle cx="12" cy="12" r="9" strokeWidth="2" />
         </svg>
       </div>
-      <h3 className="mt-4 text-lg font-bold text-black">No job orders found.</h3>
-      <p className="mt-1 max-w-md text-sm text-gray-500">Created Job Orders will appear here.</p>
+      <h3 className="mt-4 text-lg font-bold text-black">No pending approvals.</h3>
+      <p className="mt-1 max-w-md text-sm text-gray-500">Completed Job Orders submitted for approval will appear here.</p>
     </div>
   )
 }
 
-function TableButton({ children, href, onClick, tone = 'default', disabled = false, target, rel }) {
-  const base =
-    'inline-flex items-center justify-center rounded-xl px-3 py-2 text-xs font-semibold transition focus:outline-none focus:ring-2 focus:ring-offset-2'
+function ActionButton({ children, href, onClick, tone = 'default', disabled = false, target, rel }) {
+  const base = 'inline-flex items-center justify-center rounded-xl px-3 py-2 text-xs font-semibold transition focus:outline-none focus:ring-2 focus:ring-offset-2'
   const tones = {
     default: 'border border-gray-200 bg-white text-black hover:bg-gray-50 focus:ring-gray-200',
-    primary: 'bg-taguigRed text-white hover:bg-taguigDark focus:ring-red-200',
-    danger: 'border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 focus:ring-red-200',
-    success: 'border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 focus:ring-emerald-200',
+    success: 'bg-emerald-600 text-white hover:bg-emerald-700 focus:ring-emerald-200',
+    danger: 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-200',
   }
 
   if (href) {
@@ -93,7 +45,15 @@ function TableButton({ children, href, onClick, tone = 'default', disabled = fal
   )
 }
 
-export default function JOListPage({ title, description, status = null, allowedRoles = ['admin', 'technician'] }) {
+function resolveProofUrl(row) {
+  const proofFile = Array.isArray(row?.completion_reports) ? row.completion_reports[0]?.proof_file : null
+  if (!proofFile) return `/jo/${row.id}/pdf`
+  if (proofFile.startsWith('http')) return proofFile
+  if (!SUPABASE_URL) return `/jo/${row.id}/pdf`
+  return `${SUPABASE_URL}/storage/v1/object/public/signed-jo-proofs/${proofFile}`
+}
+
+export default function ApprovalQueuePage() {
   const { session, user } = useAuth()
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
@@ -104,11 +64,9 @@ export default function JOListPage({ title, description, status = null, allowedR
   const [limit] = useState(10)
   const [refreshTick, setRefreshTick] = useState(0)
 
-  const [statusFilter, setStatusFilter] = useState(status || 'all')
   const [searchInput, setSearchInput] = useState('')
   const [dateFromInput, setDateFromInput] = useState('')
   const [dateToInput, setDateToInput] = useState('')
-
   const [debouncedSearch, setDebouncedSearch] = useState('')
 
   const totalPages = useMemo(() => Math.max(1, Math.ceil((total || 0) / limit)), [limit, total])
@@ -122,7 +80,7 @@ export default function JOListPage({ title, description, status = null, allowedR
 
   useEffect(() => {
     setPage(1)
-  }, [statusFilter, debouncedSearch, dateFromInput, dateToInput])
+  }, [debouncedSearch, dateFromInput, dateToInput])
 
   useEffect(() => {
     let mounted = true
@@ -137,8 +95,7 @@ export default function JOListPage({ title, description, status = null, allowedR
         const params = new URLSearchParams()
         params.set('page', String(page))
         params.set('limit', String(limit))
-
-        if (statusFilter && statusFilter !== 'all') params.set('status', statusFilter)
+        params.set('status', 'for_approval')
         if (debouncedSearch) params.set('q', debouncedSearch)
         if (dateFromInput) params.set('date_from', dateFromInput)
         if (dateToInput) params.set('date_to', dateToInput)
@@ -152,7 +109,7 @@ export default function JOListPage({ title, description, status = null, allowedR
         const payload = await response.json()
 
         if (!response.ok) {
-          throw new Error(payload?.error || 'Failed to load job orders')
+          throw new Error(payload?.error || 'Failed to load approval queue')
         }
 
         if (!mounted) return
@@ -172,7 +129,7 @@ export default function JOListPage({ title, description, status = null, allowedR
     return () => {
       mounted = false
     }
-  }, [debouncedSearch, dateFromInput, dateToInput, limit, page, refreshTick, session?.access_token, statusFilter])
+  }, [dateFromInput, dateToInput, debouncedSearch, limit, page, refreshTick, session?.access_token])
 
   async function updateRowStatus(jobOrderId, action, remarks = '') {
     if (!session?.access_token) return
@@ -197,7 +154,7 @@ export default function JOListPage({ title, description, status = null, allowedR
       const payload = await response.json()
 
       if (!response.ok) {
-        throw new Error(payload?.error || 'Failed to update job order')
+        throw new Error(payload?.error || 'Failed to update approval status')
       }
 
       setRefreshTick((value) => value + 1)
@@ -223,15 +180,14 @@ export default function JOListPage({ title, description, status = null, allowedR
     setSearchInput('')
     setDateFromInput('')
     setDateToInput('')
-    setStatusFilter(status || 'all')
     setPage(1)
   }
 
   return (
-    <ProtectedRoute allowedRoles={allowedRoles}>
-      <Layout title={title} subtitle="Job Orders">
+    <ProtectedRoute allowedRoles={['admin']}>
+      <Layout title="Approval Queue" subtitle="Job Orders">
         <div className="mx-auto max-w-6xl space-y-5">
-          {description ? <p className="text-sm text-gray-600">{description}</p> : null}
+          <p className="text-sm text-gray-600">Completed JOs waiting for admin review and approval.</p>
 
           <div className="rounded-[24px] border border-gray-200 bg-white p-5 shadow-sm">
             <div className="grid gap-3 xl:grid-cols-[minmax(0,2fr)_repeat(3,minmax(0,1fr))]">
@@ -253,7 +209,7 @@ export default function JOListPage({ title, description, status = null, allowedR
                   type="date"
                   value={dateFromInput}
                   onChange={(e) => setDateFromInput(e.target.value)}
-                  className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none placeholder:text-gray-400 focus:border-black"
+                  className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-black"
                 />
               </label>
 
@@ -267,20 +223,12 @@ export default function JOListPage({ title, description, status = null, allowedR
                 />
               </label>
 
-              <label className="block">
+              <div className="block">
                 <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Status</span>
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-black"
-                >
-                  {STATUS_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                <div className="flex h-[50px] items-center rounded-2xl border border-gray-200 bg-gray-50 px-4 text-sm font-semibold text-orange-700">
+                  For Approval
+                </div>
+              </div>
             </div>
 
             <div className="mt-4 flex items-center justify-between gap-3">
@@ -313,50 +261,38 @@ export default function JOListPage({ title, description, status = null, allowedR
                           <th className="px-4 py-3">JO No.</th>
                           <th className="px-4 py-3">Location</th>
                           <th className="px-4 py-3">Date</th>
-                          <th className="px-4 py-3">Status</th>
+                          <th className="px-4 py-3">Submitted By</th>
                           <th className="px-4 py-3">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
                         {rows.map((row) => {
-                          const canApprove = (row.status || '').toLowerCase() === 'for_approval' || statusFilter === 'for_approval'
+                          const proofUrl = resolveProofUrl(row)
                           return (
                             <tr key={row.id} className="border-t border-gray-100 align-top">
                               <td className="px-4 py-4 font-medium text-black">{row.jo_number || 'TBD'}</td>
                               <td className="px-4 py-4 text-gray-700">{row.location || '—'}</td>
                               <td className="px-4 py-4 text-gray-700">{row.date || '—'}</td>
-                              <td className="px-4 py-4 text-gray-700">
-                                <div className="space-y-2">
-                                  <StatusBadge status={row.status} />
-                                  {row.rejection_remarks ? <p className="max-w-xs text-xs text-red-600">Remarks: {row.rejection_remarks}</p> : null}
-                                </div>
-                              </td>
+                              <td className="px-4 py-4 text-gray-700">{row.requestor_name || '—'}</td>
                               <td className="px-4 py-4">
                                 <div className="flex flex-wrap gap-2">
-                                  <TableButton href={`/jo/${row.id}/pdf`} target="_blank" rel="noreferrer" tone="default">
-                                    View
-                                  </TableButton>
-                                  <TableButton href={`/jo/${row.id}/pdf`} target="_blank" rel="noreferrer" tone="default">
-                                    Download PDF
-                                  </TableButton>
-                                  {canApprove ? (
-                                    <>
-                                      <TableButton
-                                        tone="success"
-                                        disabled={actionLoadingId === row.id}
-                                        onClick={() => updateRowStatus(row.id, 'approve')}
-                                      >
-                                        Approve
-                                      </TableButton>
-                                      <TableButton
-                                        tone="danger"
-                                        disabled={actionLoadingId === row.id}
-                                        onClick={() => handleReject(row.id)}
-                                      >
-                                        Reject
-                                      </TableButton>
-                                    </>
-                                  ) : null}
+                                  <ActionButton href={proofUrl} target="_blank" rel="noreferrer" tone="default">
+                                    View Proof
+                                  </ActionButton>
+                                  <ActionButton
+                                    tone="success"
+                                    disabled={actionLoadingId === row.id}
+                                    onClick={() => updateRowStatus(row.id, 'approve')}
+                                  >
+                                    Approve
+                                  </ActionButton>
+                                  <ActionButton
+                                    tone="danger"
+                                    disabled={actionLoadingId === row.id}
+                                    onClick={() => handleReject(row.id)}
+                                  >
+                                    Reject
+                                  </ActionButton>
                                 </div>
                               </td>
                             </tr>

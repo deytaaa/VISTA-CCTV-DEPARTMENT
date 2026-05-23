@@ -1,11 +1,10 @@
-import JOListPage from '../../components/jo/JOListPage'
+import ArchiveListPage from '../../components/jo/ArchiveListPage'
 
 export default function ArchivePage() {
   return (
-    <JOListPage
+    <ArchiveListPage
       title="Archived JOs"
       description="Approved and archived records for audit and reference."
-      status="archived"
       allowedRoles={['admin']}
     />
   )

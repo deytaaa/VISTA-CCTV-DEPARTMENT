@@ -15,18 +15,20 @@ function normalizeRpcJoNumber(rpcResult) {
 module.exports = {
   list: async (req, res) => {
     try {
-      const { status, page = 1, limit = 10, q, location, date } = req.query;
+      const { status, page = 1, limit = 10, q, location, date, date_from, date_to } = req.query;
       const from = (Number(page) - 1) * Number(limit);
       const to = from + Number(limit) - 1;
 
       let query = supabase
         .from('job_orders')
-        .select('*, job_order_items(*), job_order_personnel(*)', { count: 'exact' })
+        .select('*, job_order_items(*), job_order_personnel(*), completion_reports(*)', { count: 'exact' })
         .order('created_at', { ascending: false });
 
       if (status) query = query.eq('status', status);
       if (location) query = query.ilike('location', `%${location}%`);
       if (date) query = query.eq('date', date);
+      if (date_from) query = query.gte('date', date_from);
+      if (date_to) query = query.lte('date', date_to);
       if (q) {
         query = query.or(
           `jo_number.ilike.%${q}%,location.ilike.%${q}%,requestor_name.ilike.%${q}%`
