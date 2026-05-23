@@ -63,15 +63,7 @@ export default function JOListPage({ title, description, status = null, allowedR
 
   return (
     <ProtectedRoute allowedRoles={allowedRoles}>
-      <Layout
-        title={title}
-        subtitle="Job Orders"
-        actions={
-          <Link href="/dashboard" className="rounded-2xl border border-gray-200 px-4 py-2 text-sm font-semibold text-black">
-            Back to Dashboard
-          </Link>
-        }
-      >
+      <Layout title={title} subtitle="Job Orders">
         <div className="mx-auto max-w-6xl">
           {description ? <p className="mb-4 text-sm text-gray-600">{description}</p> : null}
           <div className="rounded-[24px] border border-gray-200 bg-white p-5 shadow-sm">

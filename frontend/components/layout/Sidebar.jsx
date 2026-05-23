@@ -9,6 +9,116 @@ function navClass(active) {
     : 'text-white/90 hover:bg-[#AA0000] hover:text-white'
 }
 
+function IconWrapper({ children }) {
+  return <span className="flex h-5 w-5 items-center justify-center text-current">{children}</span>
+}
+
+function DashboardIcon() {
+  return (
+    <IconWrapper>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-5 w-5">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 13h6V4H4v9zm10 7h6v-5h-6v5zM14 4h6v11h-6V4zM4 18h6v-3H4v3z" />
+      </svg>
+    </IconWrapper>
+  )
+}
+
+function CreateIcon() {
+  return (
+    <IconWrapper>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-5 w-5">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 5v14m-7-7h14" />
+      </svg>
+    </IconWrapper>
+  )
+}
+
+function SendIcon() {
+  return (
+    <IconWrapper>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-5 w-5">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M22 2L11 13" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M22 2l-7 20-4-9-9-4 20-7z" />
+      </svg>
+    </IconWrapper>
+  )
+}
+
+function PendingIcon() {
+  return (
+    <IconWrapper>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-5 w-5">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3" />
+        <circle cx="12" cy="12" r="9" strokeWidth="2" />
+      </svg>
+    </IconWrapper>
+  )
+}
+
+function ProcessingIcon() {
+  return (
+    <IconWrapper>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-5 w-5">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 3v4m0 10v4M3 12h4m10 0h4M5.6 5.6l2.8 2.8m7.2 7.2 2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8" />
+        <circle cx="12" cy="12" r="3" strokeWidth="2" />
+      </svg>
+    </IconWrapper>
+  )
+}
+
+function CompletedIcon() {
+  return (
+    <IconWrapper>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-5 w-5">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+      </svg>
+    </IconWrapper>
+  )
+}
+
+function ApprovalIcon() {
+  return (
+    <IconWrapper>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-5 w-5">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 2l7 4v6c0 5-3.5 9-7 10-3.5-1-7-5-7-10V6l7-4z" />
+      </svg>
+    </IconWrapper>
+  )
+}
+
+function ArchiveIcon() {
+  return (
+    <IconWrapper>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-5 w-5">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 7h16M6 7v12h12V7M9 11h6" />
+      </svg>
+    </IconWrapper>
+  )
+}
+
+function LogsIcon() {
+  return (
+    <IconWrapper>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-5 w-5">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
+      </svg>
+    </IconWrapper>
+  )
+}
+
+const iconByHref = {
+  '/dashboard': DashboardIcon,
+  '/jo/create': CreateIcon,
+  '/jo/sent': SendIcon,
+  '/jo/pending': PendingIcon,
+  '/jo/processing': ProcessingIcon,
+  '/jo/completed': CompletedIcon,
+  '/jo/approval': ApprovalIcon,
+  '/jo/archive': ArchiveIcon,
+  '/logs': LogsIcon,
+}
+
 export default function Sidebar({ hidden = false, setHidden = () => {}, mobileOpen = false, setMobileOpen = () => {} }) {
   const router = useRouter()
   const { role } = useAuth()
@@ -75,7 +185,14 @@ export default function Sidebar({ hidden = false, setHidden = () => {}, mobileOp
                   href={item.href}
                   className={`flex items-center rounded-2xl ${hidden ? 'px-0 py-2 justify-center' : 'px-4 py-3'} text-sm font-semibold transition ${navClass(active)}`}
                 >
-                  {!hidden ? <span className="ml-3">{item.label}</span> : null}
+                  {hidden ? (
+                    iconByHref[item.href] ? <span className="flex h-5 w-5 items-center justify-center">{iconByHref[item.href]({})}</span> : null
+                  ) : (
+                    <>
+                      {iconByHref[item.href] ? <span className="text-white/95">{iconByHref[item.href]({})}</span> : null}
+                      <span className="ml-3">{item.label}</span>
+                    </>
+                  )}
                 </Link>
               )
             })}
@@ -113,11 +230,15 @@ export default function Sidebar({ hidden = false, setHidden = () => {}, mobileOp
           <nav className="px-4 py-5">
             <p className="px-3 pb-3 text-xs font-semibold uppercase tracking-[0.35em] text-white/60">Navigation</p>
             <div className="space-y-1">
-              {visibleItems.map((item) => (
-                <Link key={item.href} href={item.href} className="block rounded-2xl px-4 py-3 text-sm font-semibold text-white/90 hover:bg-[#AA0000] hover:text-white">
-                  {item.label}
-                </Link>
-              ))}
+              {visibleItems.map((item) => {
+                const Icon = iconByHref[item.href]
+                return (
+                  <Link key={item.href} href={item.href} className="flex items-center rounded-2xl px-4 py-3 text-sm font-semibold text-white/90 hover:bg-[#AA0000] hover:text-white">
+                    {Icon ? <Icon /> : null}
+                    <span className="ml-3">{item.label}</span>
+                  </Link>
+                )
+              })}
             </div>
           </nav>
         </div>

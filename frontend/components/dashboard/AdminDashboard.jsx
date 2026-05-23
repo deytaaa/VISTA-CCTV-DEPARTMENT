@@ -8,13 +8,9 @@ import Layout from '../layout/Layout'
 
 const summaryCards = [
   { key: 'total', label: 'Total JOs' },
-  { key: 'draft', label: 'Draft', tone: 'neutral' },
-  { key: 'sent', label: 'Sent', tone: 'info' },
   { key: 'pending', label: 'Pending', tone: 'warning' },
   { key: 'processing', label: 'Processing', tone: 'info' },
-  { key: 'completed', label: 'Completed', tone: 'good' },
   { key: 'for_approval', label: 'For Approval', tone: 'warning' },
-  { key: 'approved', label: 'Approved', tone: 'good' },
   { key: 'rejected', label: 'Rejected', tone: 'danger' },
   { key: 'archived', label: 'Archived', tone: 'neutral' },
 ]
@@ -76,18 +72,16 @@ export default function AdminDashboard() {
             (acc, row) => {
               acc.total += 1
               const key = (row.status || 'draft').toLowerCase()
-              acc[key] = (acc[key] || 0) + 1
+              if (Object.prototype.hasOwnProperty.call(acc, key)) {
+                acc[key] = (acc[key] || 0) + 1
+              }
               return acc
             },
             {
               total: 0,
-              draft: 0,
-              sent: 0,
               pending: 0,
               processing: 0,
-              completed: 0,
               for_approval: 0,
-              approved: 0,
               rejected: 0,
               archived: 0,
             }
@@ -131,11 +125,6 @@ export default function AdminDashboard() {
         subtitle="Dashboard"
         actions={
           <div className="flex items-center gap-3">
-            {canCreateJo ? (
-              <Link href="/jo/create" className="rounded-2xl bg-taguigRed px-4 py-2 text-sm font-semibold text-white">
-                Create JO
-              </Link>
-            ) : null}
             <button onClick={handleSignOut} className="rounded-2xl border border-gray-200 px-4 py-2 text-sm font-semibold text-black">
               Sign out
             </button>
@@ -145,7 +134,7 @@ export default function AdminDashboard() {
         <div className="mx-auto max-w-6xl">
           {error ? <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
 
-          <section className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+          <section className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
             {summaryCards.map((card) => (
               <StatCard key={card.key} label={card.label} value={loading ? '…' : statusCounts[card.key] ?? 0} tone={card.tone} />
             ))}
