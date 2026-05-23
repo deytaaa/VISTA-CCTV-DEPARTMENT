@@ -33,44 +33,12 @@ function CreateIcon() {
   )
 }
 
-function SendIcon() {
+function JobOrdersIcon() {
   return (
     <IconWrapper>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-5 w-5">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M22 2L11 13" />
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M22 2l-7 20-4-9-9-4 20-7z" />
-      </svg>
-    </IconWrapper>
-  )
-}
-
-function PendingIcon() {
-  return (
-    <IconWrapper>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-5 w-5">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3" />
-        <circle cx="12" cy="12" r="9" strokeWidth="2" />
-      </svg>
-    </IconWrapper>
-  )
-}
-
-function ProcessingIcon() {
-  return (
-    <IconWrapper>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-5 w-5">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 3v4m0 10v4M3 12h4m10 0h4M5.6 5.6l2.8 2.8m7.2 7.2 2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8" />
-        <circle cx="12" cy="12" r="3" strokeWidth="2" />
-      </svg>
-    </IconWrapper>
-  )
-}
-
-function CompletedIcon() {
-  return (
-    <IconWrapper>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-5 w-5">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 5h16M4 12h16M4 19h16" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 5v14" />
       </svg>
     </IconWrapper>
   )
@@ -110,10 +78,7 @@ function LogsIcon() {
 const iconByHref = {
   '/dashboard': DashboardIcon,
   '/jo/create': CreateIcon,
-  '/jo/sent': SendIcon,
-  '/jo/pending': PendingIcon,
-  '/jo/processing': ProcessingIcon,
-  '/jo/completed': CompletedIcon,
+  '/jo': JobOrdersIcon,
   '/jo/approval': ApprovalIcon,
   '/jo/archive': ArchiveIcon,
   '/logs': LogsIcon,
@@ -127,10 +92,7 @@ export default function Sidebar({ hidden = false, setHidden = () => {}, mobileOp
     () => [
       { href: '/dashboard', label: 'Dashboard', roles: ['admin', 'technician'] },
       { href: '/jo/create', label: 'Create JO', roles: ['admin'] },
-      { href: '/jo/sent', label: 'Sent JO', roles: ['admin', 'technician'] },
-      { href: '/jo/pending', label: 'Pending JO', roles: ['admin', 'technician'] },
-      { href: '/jo/processing', label: 'Processing JO', roles: ['admin', 'technician'] },
-      { href: '/jo/completed', label: 'Completed JO', roles: ['admin', 'technician'] },
+      { href: '/jo', label: 'Job Orders', roles: ['admin', 'technician'] },
       { href: '/jo/approval', label: 'Approval Queue', roles: ['admin'] },
       { href: '/jo/archive', label: 'Archive', roles: ['admin'] },
       { href: '/logs', label: 'Activity Logs', roles: ['admin'] },
@@ -150,7 +112,7 @@ export default function Sidebar({ hidden = false, setHidden = () => {}, mobileOp
         <div className={`relative border-b border-white/15 ${hidden ? 'px-2 py-4' : 'px-6 py-6 pr-14'}`}>
           <div className={`flex items-center gap-3 ${hidden ? 'justify-center' : ''}`}>
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/10 ring-1 ring-white/20">
-              <img src="/images/City_of_Taguig_logo.png" alt="City of Taguig logo" className="h-9 w-9 object-contain" />
+              <img src="/images/City_of_Taguig_logo.png" alt="City of Taguig logo" className="h-15 w-15 object-contain" />
             </div>
             {!hidden ? (
               <div className="min-w-0">

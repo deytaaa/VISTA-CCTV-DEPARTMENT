@@ -79,24 +79,30 @@ module.exports = {
   create: async (req, res) => {
     try {
       const payload = req.body || {};
-      // Generate JO number via RPC if available
-      let joNumber = null;
-      try {
-        const { data: rpcData, error: rpcError } = await supabase.rpc('generate_jo_number');
-        if (!rpcError) joNumber = normalizeRpcJoNumber(rpcData);
-      } catch (e) {
-        // ignore
+      const status = payload.status || 'draft';
+      // Prefer caller-provided JO number (frontend generates on submit for sent JOs).
+      let joNumber = payload.jo_number || null;
+
+      // Generate only for non-draft submissions when JO number is still missing.
+      if (!joNumber && status !== 'draft') {
+        try {
+          const { data: rpcData, error: rpcError } = await supabase.rpc('generate_jo_number');
+          if (!rpcError) joNumber = normalizeRpcJoNumber(rpcData);
+        } catch (e) {
+          // ignore and fail below if still missing
+        }
       }
 
-      // Fallback: allow caller to provide jo_number or leave null
-      if (!joNumber && payload.jo_number) joNumber = payload.jo_number;
+      if (!joNumber && status !== 'draft') {
+        return res.status(500).json({ error: 'Failed to generate JO number' });
+      }
 
       const insertObj = {
         jo_number: joNumber,
         date: payload.date || new Date().toISOString().slice(0, 10),
         location: payload.location || null,
         requestor_name: payload.requestor_name || null,
-        status: payload.status || 'draft',
+        status,
         sender_id: payload.sender_id || null,
         receiver_id: payload.receiver_id || null
       };

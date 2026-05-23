@@ -5,9 +5,9 @@ import { useAuth } from '../context/AuthContext'
 
 export default function CreateJO() {
   const { session, user } = useAuth()
-  const [joNumber, setJoNumber] = useState('');
-  const [date, setDate] = useState('');
-  const [location, setLocation] = useState('');
+  const [joNumber, setJoNumber] = useState('')
+  const [date, setDate] = useState('')
+  const [location, setLocation] = useState('')
   const [items, setItems] = useState([{ item_no: 1, item_name: '', reference_no: '', quantity: '' }])
   const [personnel, setPersonnel] = useState([{ personnel_no: 1, name: '' }])
   const [technicians, setTechnicians] = useState([])
@@ -20,31 +20,6 @@ export default function CreateJO() {
   useEffect(() => {
     const now = new Date()
     setDate(now.toISOString().slice(0, 10))
-  }, [])
-
-  useEffect(() => {
-    let active = true
-
-    async function loadJoNumber() {
-      try {
-        const base = process.env.NEXT_PUBLIC_API_URL || ''
-        const res = await fetch(`${base}/api/jo/generate`, { method: 'POST' })
-        const data = await res.json()
-        if (active && data?.jo_number) {
-          setJoNumber(data.jo_number)
-        }
-      } catch (fetchError) {
-        if (active) {
-          setJoNumber('JO-AUTO-GENERATED')
-        }
-      }
-    }
-
-    loadJoNumber()
-
-    return () => {
-      active = false
-    }
   }, [])
 
   useEffect(() => {
@@ -73,9 +48,6 @@ export default function CreateJO() {
 
         const list = Array.isArray(payload?.data) ? payload.data : []
         setTechnicians(list)
-        if (list.length > 0) {
-          setSelectedTechnicianId((current) => current || list[0].id)
-        }
       } catch (fetchError) {
         if (active) {
           setError(fetchError.message)
@@ -124,11 +96,28 @@ export default function CreateJO() {
         headers.Authorization = `Bearer ${session.access_token}`
       }
 
+      let joNumberForSubmit = null
+
+      // Generate JO number only when actually generating a JO (not on page load/drafts).
+      if (status === 'sent') {
+        const genRes = await fetch(`${base}/api/jo/generate`, {
+          method: 'POST',
+          headers,
+        })
+
+        const genPayload = await genRes.json()
+        if (!genRes.ok || !genPayload?.jo_number) {
+          throw new Error(genPayload?.error || 'Failed to generate JO number')
+        }
+
+        joNumberForSubmit = genPayload.jo_number
+      }
+
       const res = await fetch(`${base}/api/job-orders`, {
         method: 'POST',
         headers,
         body: JSON.stringify({
-          jo_number: joNumber,
+          jo_number: joNumberForSubmit,
           date,
           location,
           status,
@@ -145,8 +134,9 @@ export default function CreateJO() {
         throw new Error(data?.error || 'Failed to save job order')
       }
 
-      setSuccess(status === 'draft' ? 'Job order saved as draft.' : 'Job order generated successfully.')
-      if (data?.data?.jo_number) setJoNumber(data.data.jo_number)
+      const savedJoNumber = data?.data?.jo_number || ''
+      setJoNumber(savedJoNumber)
+      setSuccess(status === 'draft' ? 'Job order saved as draft.' : `Job Order ${savedJoNumber} has been generated successfully`)
     } catch (submitError) {
       setError(submitError.message)
     } finally {
@@ -169,8 +159,8 @@ export default function CreateJO() {
             <div className="mt-6 grid gap-5 lg:grid-cols-4">
               <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4">
                 <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">JO Number</label>
-                <input value={joNumber} readOnly className="w-full border-0 bg-transparent text-sm font-semibold text-black outline-none" />
-                <p className="mt-2 text-xs text-gray-500">AUTO-GENERATED - READ ONLY</p>
+                <input value={joNumber} readOnly placeholder="Will be assigned on submit" className="w-full border-0 bg-transparent text-sm font-semibold text-black outline-none placeholder:text-gray-400" />
+                <p className="mt-2 text-xs text-gray-500">AUTO-GENERATED ON SUBMIT</p>
               </div>
 
               <div className="rounded-2xl border border-gray-200 bg-white px-4 py-4">
@@ -184,7 +174,7 @@ export default function CreateJO() {
               </div>
 
               <div className="rounded-2xl border border-gray-200 bg-white px-4 py-4">
-                <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Assign To</label>
+                <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Assign To Technician</label>
                 <select
                   value={selectedTechnicianId}
                   onChange={(e) => setSelectedTechnicianId(e.target.value)}
@@ -229,7 +219,7 @@ export default function CreateJO() {
                     <div className="text-sm font-semibold text-gray-500">{index + 1}</div>
                     <input value={item.item_name} onChange={(e) => updateItem(index, 'item_name', e.target.value)} placeholder="Enter item name" className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none placeholder:text-gray-400 focus:border-black" />
                     <input value={item.reference_no} onChange={(e) => updateItem(index, 'reference_no', e.target.value)} placeholder="Reference no." className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none placeholder:text-gray-400 focus:border-black" />
-                    <input type="number" min="0" value={item.quantity} onChange={(e) => updateItem(index, 'quantity', e.target.value)} className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-black" />
+                    <input type="number" min="0" value={item.quantity} onChange={(e) => updateItem(index, 'quantity', e.target.value)} placeholder="0" className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none placeholder:text-gray-400 focus:border-black" />
                     <button type="button" onClick={() => removeItem(index)} className="mx-auto rounded-full border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-500 transition hover:border-red-200 hover:text-red-700" aria-label={`Remove item ${index + 1}`}>
                       -
                     </button>
