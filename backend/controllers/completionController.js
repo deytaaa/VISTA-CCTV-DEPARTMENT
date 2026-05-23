@@ -30,7 +30,7 @@ module.exports = {
   create: async (req, res) => {
     try {
       const payload = req.body || {};
-      const completedBy = req.user?.id || payload.completed_by || null;
+      const completedBy = req.user?.id || null;
 
       const { data, error } = await supabase
         .from('completion_reports')

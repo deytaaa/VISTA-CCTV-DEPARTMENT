@@ -12,6 +12,37 @@ function normalizeRpcJoNumber(rpcResult) {
   return null;
 }
 
+async function notifyUser({ userId, jobOrderId, title, message }) {
+  if (!userId) return;
+
+  await supabase.from('notifications').insert({
+    user_id: userId,
+    job_order_id: jobOrderId,
+    title,
+    message,
+  });
+}
+
+async function notifyTechnicianForSentJobOrder({ jobOrderId, joNumber, receiverId }) {
+  const message = joNumber ? `New Job Order ${joNumber} has been assigned to you` : 'New Job Order has been assigned to you';
+  await notifyUser({
+    userId: receiverId,
+    jobOrderId,
+    title: 'Job Order Assigned',
+    message,
+  });
+}
+
+async function notifyAdminForSentJobOrder({ jobOrderId, joNumber, adminUserId }) {
+  const message = joNumber ? `Job Order ${joNumber} has been dispatched` : 'Job Order has been dispatched';
+  await notifyUser({
+    userId: adminUserId,
+    jobOrderId,
+    title: 'Job Order Dispatched',
+    message,
+  });
+}
+
 module.exports = {
   list: async (req, res) => {
     try {
@@ -22,7 +53,7 @@ module.exports = {
 
       let query = supabase
         .from('job_orders')
-        .select('*, sender:users!job_orders_sender_id_fkey(id, name, email, role), receiver:users!job_orders_receiver_id_fkey(id, name, email, role), job_order_items(*), job_order_personnel(*), completion_reports(*)', { count: 'exact' })
+        .select('*, sender:users!job_orders_sender_id_fkey(id, name, email, role), receiver:users!job_orders_receiver_id_fkey(id, name, email, role), job_order_items(*), job_order_personnel(*), completion_reports(*, completed_by_user:users!completion_reports_completed_by_fkey(id, name, email, role))', { count: 'exact' })
         .order('created_at', { ascending: false });
 
       if (technicianReceiverId) query = query.eq('receiver_id', technicianReceiverId);
@@ -65,7 +96,7 @@ module.exports = {
       const { id } = req.params;
       const { data, error } = await supabase
         .from('job_orders')
-        .select('*, sender:users!job_orders_sender_id_fkey(id, name, email, role), receiver:users!job_orders_receiver_id_fkey(id, name, email, role), job_order_items(*), job_order_personnel(*), completion_reports(*)')
+        .select('*, sender:users!job_orders_sender_id_fkey(id, name, email, role), receiver:users!job_orders_receiver_id_fkey(id, name, email, role), job_order_items(*), job_order_personnel(*), completion_reports(*, completed_by_user:users!completion_reports_completed_by_fkey(id, name, email, role))')
         .eq('id', id)
         .single();
       if (error) return res.status(404).json({ error: error.message || error });
@@ -104,7 +135,8 @@ module.exports = {
         requestor_name: payload.requestor_name || null,
         status,
         sender_id: payload.sender_id || null,
-        receiver_id: payload.receiver_id || null
+        receiver_id: payload.receiver_id || null,
+        updated_at: new Date().toISOString()
       };
 
       const { data: created, error: insertError } = await supabase.from('job_orders').insert(insertObj).select('*').single();
@@ -135,6 +167,20 @@ module.exports = {
         if (persError) console.warn('Personnel insert warning', persError);
       }
 
+      if (status === 'sent') {
+        await notifyTechnicianForSentJobOrder({
+          jobOrderId,
+          joNumber: created.jo_number,
+          receiverId: created.receiver_id,
+        });
+
+        await notifyAdminForSentJobOrder({
+          jobOrderId,
+          joNumber: created.jo_number,
+          adminUserId: req.user?.id || payload.sender_id || null,
+        });
+      }
+
       return res.status(201).json({ data: created });
     } catch (err) {
       console.error(err);
@@ -146,8 +192,69 @@ module.exports = {
     try {
       const { id } = req.params;
       const payload = req.body || {};
-      const { data, error } = await supabase.from('job_orders').update(payload).eq('id', id).select('*').single();
+      const { data: current, error: currentError } = await supabase
+        .from('job_orders')
+        .select('id, jo_number, status, receiver_id, items:job_order_items(*), personnel:job_order_personnel(*)')
+        .eq('id', id)
+        .single();
+
+      if (currentError || !current) {
+        return res.status(404).json({ error: currentError?.message || 'Job order not found' });
+      }
+
+      const { data, error } = await supabase
+        .from('job_orders')
+        .update({
+          ...payload,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', id)
+        .select('*')
+        .single();
       if (error) return res.status(500).json({ error: error.message || error });
+
+      if (payload.status === 'sent' && current.status !== 'sent') {
+        await notifyTechnicianForSentJobOrder({
+          jobOrderId: id,
+          joNumber: data?.jo_number || payload.jo_number || current.jo_number || null,
+          receiverId: data?.receiver_id || payload.receiver_id || current.receiver_id || null,
+        });
+
+        await notifyAdminForSentJobOrder({
+          jobOrderId: id,
+          joNumber: data?.jo_number || payload.jo_number || current.jo_number || null,
+          adminUserId: req.user?.id || data?.sender_id || payload.sender_id || null,
+        });
+      }
+
+      if (Array.isArray(payload.items)) {
+        await supabase.from('job_order_items').delete().eq('job_order_id', id);
+        if (payload.items.length > 0) {
+          const itemsToInsert = payload.items.map((item, index) => ({
+            job_order_id: id,
+            item_no: item.item_no || index + 1,
+            item_name: item.item_name,
+            reference_no: item.reference_no || null,
+            quantity: item.quantity || 1,
+          }));
+          const { error: itemsError } = await supabase.from('job_order_items').insert(itemsToInsert);
+          if (itemsError) return res.status(500).json({ error: itemsError.message || itemsError });
+        }
+      }
+
+      if (Array.isArray(payload.personnel)) {
+        await supabase.from('job_order_personnel').delete().eq('job_order_id', id);
+        if (payload.personnel.length > 0) {
+          const personnelToInsert = payload.personnel.map((person, index) => ({
+            job_order_id: id,
+            personnel_no: person.personnel_no || index + 1,
+            name: person.name,
+          }));
+          const { error: personnelError } = await supabase.from('job_order_personnel').insert(personnelToInsert);
+          if (personnelError) return res.status(500).json({ error: personnelError.message || personnelError });
+        }
+      }
+
       return res.json({ data });
     } catch (err) {
       console.error(err);
@@ -183,7 +290,7 @@ module.exports = {
 
       const { data: current, error: currentError } = await supabase
         .from('job_orders')
-        .select('id, jo_number, status, receiver_id')
+        .select('id, jo_number, status, receiver_id, sender_id')
         .eq('id', id)
         .single();
 
@@ -277,6 +384,15 @@ module.exports = {
         action: 'Marked as Completed',
         job_order_id: id,
       });
+
+      if (current?.sender_id) {
+        await supabase.from('notifications').insert({
+          user_id: current.sender_id,
+          job_order_id: id,
+          title: 'Job Order Submitted for Approval',
+          message: `Job Order ${current?.jo_number || id} submitted for approval`,
+        });
+      }
 
       return res.json({ data });
     } catch (err) {

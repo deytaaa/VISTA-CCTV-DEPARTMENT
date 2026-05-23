@@ -1,10 +1,43 @@
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/router'
 import ProtectedRoute from '../components/ProtectedRoute'
 import Layout from '../components/layout/Layout'
 import { useAuth } from '../context/AuthContext'
 
+function mapItemRows(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return [{ item_no: 1, item_name: '', reference_no: '', quantity: '' }]
+  }
+
+  return rows.map((row, index) => ({
+    item_no: row?.item_no || index + 1,
+    item_name: row?.item_name || '',
+    reference_no: row?.reference_no || '',
+    quantity: row?.quantity || '',
+  }))
+}
+
+function mapPersonnelRows(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return [{ personnel_no: 1, name: '' }]
+  }
+
+  return rows.map((row, index) => ({
+    personnel_no: row?.personnel_no || index + 1,
+    name: row?.name || '',
+  }))
+}
+
+function getTodayValue() {
+  const now = new Date()
+  const offset = now.getTimezoneOffset() * 60000
+  return new Date(now.getTime() - offset).toISOString().slice(0, 10)
+}
+
 export default function CreateJO() {
+  const router = useRouter()
   const { session, user } = useAuth()
+  const [draftId, setDraftId] = useState('')
   const [joNumber, setJoNumber] = useState('')
   const [date, setDate] = useState('')
   const [location, setLocation] = useState('')
@@ -15,11 +48,10 @@ export default function CreateJO() {
   const [techniciansLoading, setTechniciansLoading] = useState(true)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [toast, setToast] = useState({ visible: false, exiting: false, joNumber: '' })
+  const [toast, setToast] = useState({ visible: false, exiting: false, kind: 'sent', headline: '', detail: '', helper: '' })
 
   useEffect(() => {
-    const now = new Date()
-    setDate(now.toISOString().slice(0, 10))
+    setDate(getTodayValue())
   }, [])
 
   async function loadNextJoNumber() {
@@ -39,8 +71,62 @@ export default function CreateJO() {
   }
 
   useEffect(() => {
-    loadNextJoNumber()
-  }, [])
+    if (!router.isReady) return
+
+    const draftQuery = Array.isArray(router.query.draft_id) ? router.query.draft_id[0] : router.query.draft_id
+
+    if (!draftQuery) {
+      loadNextJoNumber()
+      return
+    }
+
+    let active = true
+
+    async function loadDraft() {
+      if (!session?.access_token) return
+
+      setLoading(true)
+      setError('')
+
+      try {
+        const base = process.env.NEXT_PUBLIC_API_URL || ''
+        const res = await fetch(`${base}/api/job-orders/${draftQuery}`, {
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        })
+
+        const payload = await res.json()
+
+        if (!res.ok) {
+          throw new Error(payload?.error || 'Failed to load draft job order')
+        }
+
+        const draft = payload?.data || null
+        if (!active || !draft) return
+
+        setDraftId(draft.id || draftQuery)
+        setJoNumber('')
+        setDate(draft.date || getTodayValue())
+        setLocation(draft.location || '')
+        setItems(mapItemRows(draft.job_order_items))
+        setPersonnel(mapPersonnelRows(draft.job_order_personnel))
+        setSelectedTechnicianId(draft.receiver_id || '')
+      } catch (loadError) {
+        if (active) {
+          setError(loadError.message)
+        }
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
+
+    loadDraft()
+
+    return () => {
+      active = false
+    }
+  }, [router.isReady, router.query.draft_id, session?.access_token])
 
   useEffect(() => {
     let active = true
@@ -98,12 +184,100 @@ export default function CreateJO() {
   }
 
   function resetForm() {
+    setDraftId('')
     setJoNumber('')
-    setDate('')
+    setDate(getTodayValue())
     setLocation('')
     setItems([{ item_no: 1, item_name: '', reference_no: '', quantity: '' }])
     setPersonnel([{ personnel_no: 1, name: '' }])
     setSelectedTechnicianId('')
+  }
+
+  async function replaceDraftRows(jobOrderId, nextItems, nextPersonnel, headers) {
+    const base = process.env.NEXT_PUBLIC_API_URL || ''
+
+    const itemsResponse = await fetch(`${base}/api/items?job_order_id=${jobOrderId}`, {
+      headers,
+    })
+    const itemsPayload = await itemsResponse.json()
+    if (itemsResponse.ok && Array.isArray(itemsPayload?.data)) {
+      await Promise.all(
+        itemsPayload.data.map((item) =>
+          fetch(`${base}/api/items/${item.id}`, {
+            method: 'DELETE',
+            headers,
+          })
+        )
+      )
+    }
+
+    const personnelResponse = await fetch(`${base}/api/personnel?job_order_id=${jobOrderId}`, {
+      headers,
+    })
+    const personnelPayload = await personnelResponse.json()
+    if (personnelResponse.ok && Array.isArray(personnelPayload?.data)) {
+      await Promise.all(
+        personnelPayload.data.map((person) =>
+          fetch(`${base}/api/personnel/${person.id}`, {
+            method: 'DELETE',
+            headers,
+          })
+        )
+      )
+    }
+
+    await Promise.all(
+      nextItems.map((item, index) =>
+        fetch(`${base}/api/items`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            job_order_id: jobOrderId,
+            item_no: item.item_no || index + 1,
+            item_name: item.item_name,
+            reference_no: item.reference_no || null,
+            quantity: item.quantity || 1,
+          }),
+        })
+      )
+    )
+
+    await Promise.all(
+      nextPersonnel.map((person, index) =>
+        fetch(`${base}/api/personnel`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            job_order_id: jobOrderId,
+            personnel_no: person.personnel_no || index + 1,
+            name: person.name,
+          }),
+        })
+      )
+    )
+  }
+
+  function showToast(kind, detail) {
+    if (kind === 'draft') {
+      setToast({
+        visible: true,
+        exiting: false,
+        kind,
+        headline: 'Draft Saved',
+        detail,
+        helper: 'You can complete and send it later.',
+      })
+      return
+    }
+
+    setToast({
+      visible: true,
+      exiting: false,
+      kind,
+      headline: 'Job Order Generated',
+      detail,
+      helper: 'Sent to technician.',
+    })
   }
 
   useEffect(() => {
@@ -114,26 +288,31 @@ export default function CreateJO() {
     }, 5000)
 
     const resetTimer = setTimeout(() => {
-      setToast({ visible: false, exiting: false, joNumber: '' })
+      setToast({ visible: false, exiting: false, kind: 'sent', headline: '', detail: '', helper: '' })
       resetForm()
-      void loadNextJoNumber()
-    }, 5300)
+    }, 3000)
 
     return () => {
       clearTimeout(exitTimer)
       clearTimeout(resetTimer)
     }
-  }, [toast.visible, toast.joNumber])
+  }, [toast.visible, toast.kind, toast.detail, toast.headline, toast.helper])
 
   async function submitJobOrder(status) {
     setError('')
-    setLoading(true)
 
-    if (!selectedTechnicianId) {
+    if (status === 'draft' && !location.trim()) {
+      setError('Please enter a location before saving as draft.')
+      return
+    }
+
+    if (status === 'sent' && !selectedTechnicianId) {
       setError('Please assign this job order to a technician.')
       setLoading(false)
       return
     }
+
+    setLoading(true)
 
     try {
       const base = process.env.NEXT_PUBLIC_API_URL || ''
@@ -144,6 +323,7 @@ export default function CreateJO() {
       }
 
       let joNumberForSubmit = null
+      const isEditingDraft = Boolean(draftId)
 
       // Generate JO number only when actually generating a JO (not on page load/drafts).
       if (status === 'sent') {
@@ -160,20 +340,36 @@ export default function CreateJO() {
         joNumberForSubmit = genPayload.jo_number
       }
 
-      const res = await fetch(`${base}/api/job-orders`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          jo_number: joNumberForSubmit,
-          date,
-          location,
-          status,
-          sender_id: user?.id || null,
-          receiver_id: selectedTechnicianId,
-          items,
-          personnel,
-        }),
-      })
+      let res
+      if (isEditingDraft) {
+        res = await fetch(`${base}/api/job-orders/${draftId}`, {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify({
+            jo_number: status === 'sent' ? joNumberForSubmit : null,
+            date,
+            location,
+            status,
+            sender_id: user?.id || null,
+            receiver_id: selectedTechnicianId || null,
+          }),
+        })
+      } else {
+        res = await fetch(`${base}/api/job-orders`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            jo_number: joNumberForSubmit,
+            date,
+            location,
+            status,
+            sender_id: user?.id || null,
+            receiver_id: selectedTechnicianId,
+            items,
+            personnel,
+          }),
+        })
+      }
 
       const data = await res.json()
 
@@ -181,11 +377,17 @@ export default function CreateJO() {
         throw new Error(data?.error || 'Failed to save job order')
       }
 
-      const savedJoNumber = data?.data?.jo_number || ''
+      const savedJoNumber = data?.data?.jo_number || joNumberForSubmit || ''
       setJoNumber(savedJoNumber)
 
+      if (isEditingDraft) {
+        await replaceDraftRows(draftId, items, personnel, headers)
+      }
+
       if (status === 'sent') {
-        setToast({ visible: true, exiting: false, joNumber: savedJoNumber })
+        showToast('sent', savedJoNumber)
+      } else {
+        showToast('draft', 'Saved successfully')
       }
     } catch (submitError) {
       setError(submitError.message)
@@ -200,13 +402,17 @@ export default function CreateJO() {
         {toast.visible || toast.exiting ? (
           <div className="fixed right-4 top-4 z-50 w-[320px] max-w-[calc(100vw-2rem)]">
             <div
-              className={`rounded-2xl border-l-4 border-l-[#10B981] bg-white px-4 py-4 shadow-[0_12px_30px_rgba(0,0,0,0.12)] transition-all duration-300 ease-out ${
+              className={`rounded-2xl border-l-4 bg-white px-4 py-4 shadow-[0_12px_30px_rgba(0,0,0,0.12)] transition-all duration-300 ease-out ${
+                toast.kind === 'draft' ? 'border-l-[#6B7280]' : 'border-l-[#10B981]'
+              } ${
                 toast.exiting ? 'translate-x-full opacity-0' : 'translate-x-0 opacity-100'
               }`}
             >
-              <p className="text-sm font-bold text-black">✅ Job Order Generated</p>
-              <p className="mt-1 text-2xl font-black tracking-tight text-[#CC0000]">{toast.joNumber}</p>
-              <p className="mt-1 text-xs font-medium text-gray-500">Sent to technician.</p>
+              <p className="text-sm font-bold text-black">{toast.headline}</p>
+              <p className={`mt-1 text-2xl font-black tracking-tight ${toast.kind === 'draft' ? 'text-[#374151]' : 'text-[#CC0000]'}`}>
+                {toast.detail}
+              </p>
+              <p className="mt-1 text-xs font-medium text-gray-500">{toast.helper}</p>
             </div>
           </div>
         ) : null}

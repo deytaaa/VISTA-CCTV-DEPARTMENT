@@ -5,6 +5,7 @@ import ProtectedRoute from '../../../components/ProtectedRoute'
 import Layout from '../../../components/layout/Layout'
 import { useAuth } from '../../../context/AuthContext'
 import { supabase } from '../../../lib/supabaseClient'
+import JOStatusBadge from '../../../components/jo/JOStatusBadge'
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || ''
 
@@ -26,29 +27,6 @@ function formatDateTime(value) {
     hour: '2-digit',
     minute: '2-digit',
   })
-}
-
-function statusLabel(status) {
-  return (status || 'draft').replace(/_/g, ' ')
-}
-
-function statusBadgeClass(status) {
-  switch ((status || '').toLowerCase()) {
-    case 'sent':
-      return 'bg-sky-100 text-sky-700 ring-sky-200'
-    case 'processing':
-      return 'bg-indigo-100 text-indigo-700 ring-indigo-200'
-    case 'completed':
-      return 'bg-emerald-100 text-emerald-700 ring-emerald-200'
-    case 'for_approval':
-      return 'bg-orange-100 text-orange-800 ring-orange-200'
-    case 'approved':
-      return 'bg-green-100 text-green-700 ring-green-200'
-    case 'rejected':
-      return 'bg-red-100 text-red-700 ring-red-200'
-    default:
-      return 'bg-gray-100 text-gray-700 ring-gray-200'
-  }
 }
 
 function ActionButton({ children, href, onClick, tone = 'default', disabled = false }) {
@@ -276,7 +254,6 @@ export default function JobOrderViewPage() {
           job_order_id: jobOrder.id,
           proof_file: uploadPayload?.publicURL || uploadPayload?.path,
           remarks: proofRemarks.trim(),
-          completed_by: user?.id || null,
           completed_at: new Date().toISOString(),
         }),
       })
@@ -344,7 +321,7 @@ export default function JobOrderViewPage() {
                 <div className="mt-3 flex flex-wrap gap-3 text-sm text-gray-600">
                   <span><strong className="text-black">Date:</strong> {formatDate(jobOrder?.date)}</span>
                   <span><strong className="text-black">Location:</strong> {jobOrder?.location || '—'}</span>
-                  <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ring-1 ${statusBadgeClass(status)}`}>{statusLabel(status)}</span>
+                  <JOStatusBadge status={status} />
                 </div>
                 {status === 'rejected' ? (
                   <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">

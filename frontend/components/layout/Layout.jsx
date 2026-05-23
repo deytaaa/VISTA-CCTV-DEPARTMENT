@@ -26,7 +26,7 @@ export default function Layout({ children, title, subtitle, actions }) {
       <Sidebar hidden={sidebarHidden} setHidden={setSidebarHidden} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} />
       <main className={`min-w-0 bg-lightGrayBg transition-[margin-left] duration-300 ${sidebarHidden ? 'md:ml-0' : 'md:ml-72'}`}>
         <Header title={title} subtitle={subtitle} actions={actions} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} sidebarHidden={sidebarHidden} setSidebarHidden={setSidebarHidden} />
-        <div className="px-6 py-6 lg:px-8">{children}</div>
+        <div className="px-4 py-4 sm:px-6 sm:py-6 lg:px-8">{children}</div>
       </main>
     </div>
   )

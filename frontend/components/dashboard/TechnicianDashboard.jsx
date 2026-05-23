@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabaseClient'
 import Layout from '../layout/Layout'
 import StatCard from './StatCard'
 import Link from 'next/link'
+import JOStatusBadge from '../jo/JOStatusBadge'
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || ''
 
@@ -12,14 +13,14 @@ const summaryCards = [
   { key: 'total', label: 'My Total JOs' },
   { key: 'sent', label: 'Sent', tone: 'warning' },
   { key: 'processing', label: 'Processing', tone: 'info' },
-  { key: 'completed', label: 'Completed', tone: 'good' },
   { key: 'for_approval', label: 'For Approval', tone: 'warning' },
+  { key: 'rejected', label: 'Rejected', tone: 'danger' },
 ]
 
 export default function TechnicianDashboard() {
   const { user, session } = useAuth()
   const [rows, setRows] = useState([])
-  const [counts, setCounts] = useState({ total: 0, sent: 0, processing: 0, completed: 0, for_approval: 0 })
+  const [counts, setCounts] = useState({ total: 0, sent: 0, processing: 0, for_approval: 0, rejected: 0 })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
@@ -28,23 +29,17 @@ export default function TechnicianDashboard() {
   function formatDate(value) {
     if (!value) return '—'
     try {
-      return new Date(value).toLocaleDateString('en-US', {
-        month: '2-digit',
-        day: '2-digit',
-        year: 'numeric',
-      })
+      const date = new Date(value)
+      if (Number.isNaN(date.getTime())) return '—'
+
+      const month = String(date.getMonth() + 1).padStart(2, '0')
+      const day = String(date.getDate()).padStart(2, '0')
+      const year = String(date.getFullYear())
+
+      return `${month}/${day}/${year}`
     } catch {
       return '—'
     }
-  }
-
-  function StatusBadge({ value }) {
-    const label = value ? value.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase()) : '—'
-    return (
-      <span className="inline-flex rounded-full bg-sky-100 px-3 py-1 text-xs font-semibold text-sky-700 ring-1 ring-sky-200">
-        {label}
-      </span>
-    )
   }
 
   useEffect(() => {
@@ -61,7 +56,7 @@ export default function TechnicianDashboard() {
         params.set('page', '1')
         params.set('limit', '100')
         params.set('receiver_id', user.id)
-        params.set('status_in', 'sent,processing,completed,for_approval')
+        params.set('status_in', 'sent,processing,for_approval,rejected')
 
         const response = await fetch(`${API_BASE_URL}/api/job-orders?${params.toString()}`, {
           headers: { Authorization: `Bearer ${session.access_token}` },
@@ -87,7 +82,7 @@ export default function TechnicianDashboard() {
               }
               return acc
             },
-            { total: 0, sent: 0, processing: 0, completed: 0, for_approval: 0 }
+            { total: 0, sent: 0, processing: 0, for_approval: 0, rejected: 0 }
           )
         )
       } catch (dashboardError) {
@@ -136,25 +131,26 @@ export default function TechnicianDashboard() {
             </div>
 
             <div className="overflow-x-auto">
-              <table className="min-w-full text-left text-sm">
+              <table className="min-w-[760px] text-left text-sm">
                 <thead className="bg-[#FFF0F0] text-gray-700">
                   <tr>
                     <th className="px-4 py-3">JO No.</th>
                     <th className="px-4 py-3">Location</th>
                     <th className="px-4 py-3">Date</th>
                     <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {loading ? (
                     <tr className="border-t border-gray-100">
-                      <td className="px-4 py-4 text-gray-500" colSpan={4}>
+                      <td className="px-4 py-4 text-gray-500" colSpan={5}>
                         Loading assigned work...
                       </td>
                     </tr>
                   ) : rows.length === 0 ? (
                     <tr className="border-t border-gray-100">
-                      <td className="px-4 py-4 text-gray-500" colSpan={4}>
+                      <td className="px-4 py-4 text-gray-500" colSpan={5}>
                         No assigned job orders yet.
                       </td>
                     </tr>
@@ -164,7 +160,12 @@ export default function TechnicianDashboard() {
                         <td className="px-4 py-3 font-medium text-black">{row.jo_number || 'TBD'}</td>
                         <td className="px-4 py-3 text-gray-700">{row.location || '—'}</td>
                         <td className="px-4 py-3 text-gray-700">{formatDate(row.date)}</td>
-                        <td className="px-4 py-3 text-gray-700"><StatusBadge value={row.status} /></td>
+                        <td className="px-4 py-3 text-gray-700"><JOStatusBadge status={row.status} technicianView /></td>
+                        <td className="px-4 py-3 text-gray-700">
+                          <Link href={`/jo/${row.id}`} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-black transition hover:bg-gray-50">
+                            View
+                          </Link>
+                        </td>
                       </tr>
                     ))
                   )}

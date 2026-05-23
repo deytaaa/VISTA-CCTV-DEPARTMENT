@@ -195,7 +195,7 @@ export default function Sidebar({ hidden = false, setHidden = () => {}, mobileOp
               {visibleItems.map((item) => {
                 const Icon = iconByHref[item.href]
                 return (
-                  <Link key={item.href} href={item.href} className="flex items-center rounded-2xl px-4 py-3 text-sm font-semibold text-white/90 hover:bg-[#AA0000] hover:text-white">
+                  <Link key={item.href} href={item.href} onClick={() => setMobileOpen(false)} className="flex items-center rounded-2xl px-4 py-3 text-sm font-semibold text-white/90 hover:bg-[#AA0000] hover:text-white">
                     {Icon ? <Icon /> : null}
                     <span className="ml-3">{item.label}</span>
                   </Link>

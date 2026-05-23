@@ -3,6 +3,7 @@ import Link from 'next/link'
 import ProtectedRoute from '../ProtectedRoute'
 import { useAuth } from '../../context/AuthContext'
 import Layout from '../layout/Layout'
+import JOStatusBadge from './JOStatusBadge'
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || ''
 
@@ -22,40 +23,6 @@ const TECHNICIAN_STATUS_OPTIONS = [
   { value: 'approved', label: 'Approved' },
   { value: 'rejected', label: 'Rejected' },
 ]
-
-function statusLabel(status) {
-  return (status || 'draft').replace(/_/g, ' ')
-}
-
-function statusMeta(status) {
-  switch ((status || '').toLowerCase()) {
-    case 'draft':
-      return { label: 'Draft', className: 'bg-gray-100 text-gray-700 ring-gray-200' }
-    case 'sent':
-      return { label: 'Sent', className: 'bg-sky-100 text-sky-700 ring-sky-200' }
-    case 'pending':
-      return { label: 'Pending', className: 'bg-amber-100 text-amber-800 ring-amber-200' }
-    case 'processing':
-      return { label: 'Processing', className: 'bg-indigo-100 text-indigo-700 ring-indigo-200' }
-    case 'completed':
-      return { label: 'Completed', className: 'bg-emerald-100 text-emerald-700 ring-emerald-200' }
-    case 'for_approval':
-      return { label: 'For Approval', className: 'bg-orange-100 text-orange-800 ring-orange-200' }
-    case 'approved':
-      return { label: 'Approved', className: 'bg-green-100 text-green-700 ring-green-200' }
-    case 'rejected':
-      return { label: 'Rejected', className: 'bg-red-100 text-red-700 ring-red-200' }
-    case 'archived':
-      return { label: 'Archived', className: 'bg-slate-100 text-slate-700 ring-slate-200' }
-    default:
-      return { label: statusLabel(status), className: 'bg-gray-100 text-gray-700 ring-gray-200' }
-  }
-}
-
-function StatusBadge({ status }) {
-  const meta = statusMeta(status)
-  return <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ring-1 ${meta.className}`}>{meta.label}</span>
-}
 
 function EmptyState({ title, description }) {
   return (
@@ -95,6 +62,13 @@ function TableButton({ children, href, onClick, tone = 'default', disabled = fal
       {children}
     </button>
   )
+}
+
+function formatDate(value) {
+  if (!value) return '—'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return date.toLocaleDateString('en-US')
 }
 
 function getLatestCompletionReport(row) {
@@ -146,9 +120,6 @@ export default function JOListPage({
   const totalPages = useMemo(() => Math.max(1, Math.ceil((total || 0) / limit)), [limit, total])
   const startRow = total === 0 ? 0 : (page - 1) * limit + 1
   const endRow = Math.min(page * limit, total)
-  const filterGridClass = showStatusFilter
-    ? 'grid gap-3 xl:grid-cols-[minmax(0,2fr)_repeat(3,minmax(0,1fr))]'
-    : 'grid gap-3 xl:grid-cols-[minmax(0,2fr)_repeat(2,minmax(0,1fr))]'
 
   useEffect(() => {
     const handle = setTimeout(() => setDebouncedSearch(searchInput.trim()), 300)
@@ -359,7 +330,6 @@ export default function JOListPage({
           job_order_id: proofJobOrder.id,
           proof_file: uploadPayload?.publicURL || uploadPayload?.path,
           remarks: proofRemarks.trim(),
-          completed_by: user.id,
           completed_at: new Date().toISOString(),
         }),
       })
@@ -474,6 +444,56 @@ export default function JOListPage({
     }
   }
 
+  async function handleSendDraftNow(row) {
+    if (!session?.access_token) return
+
+    if (!row.receiver_id) {
+      setError('Please assign this draft to a technician before sending.')
+      return
+    }
+
+    setError(null)
+    setActionLoadingId(row.id)
+
+    try {
+      const generateResponse = await fetch(`${API_BASE_URL}/api/jo/generate`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      })
+
+      const generatePayload = await generateResponse.json()
+      if (!generateResponse.ok || !generatePayload?.jo_number) {
+        throw new Error(generatePayload?.error || 'Failed to generate JO number')
+      }
+
+      const updateResponse = await fetch(`${API_BASE_URL}/api/job-orders/${row.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          jo_number: generatePayload.jo_number,
+          status: 'sent',
+          updated_at: new Date().toISOString(),
+        }),
+      })
+
+      const updatePayload = await updateResponse.json()
+      if (!updateResponse.ok) {
+        throw new Error(updatePayload?.error || 'Failed to send draft job order')
+      }
+
+      setRefreshTick((value) => value + 1)
+    } catch (sendError) {
+      setError(sendError.message)
+    } finally {
+      setActionLoadingId(null)
+    }
+  }
+
   function handleReject(jobOrderId) {
     const remarks = window.prompt('Enter rejection remarks')
     if (remarks === null) return
@@ -500,58 +520,60 @@ export default function JOListPage({
           {description ? <p className="text-sm text-gray-600">{description}</p> : null}
 
           <div className="rounded-[24px] border border-gray-200 bg-white p-5 shadow-sm">
-            <div className={filterGridClass}>
-              <div className="space-y-3">
-                <label className="block">
-                  <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Search JO No. / Location</span>
-                  <input
-                    value={searchInput}
-                    onChange={(e) => setSearchInput(e.target.value)}
-                    placeholder="Search by JO No. or Location..."
-                    className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none placeholder:text-gray-400 focus:border-black"
-                  />
-                </label>
-              </div>
-
-              <label className="block">
-                <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Date From</span>
+            <div className="flex flex-col gap-4 lg:flex-row">
+              <label className="block lg:flex-[2]">
+                <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Search JO No. / Location</span>
                 <input
-                  type="date"
-                  value={dateFromInput}
-                  onChange={(e) => setDateFromInput(e.target.value)}
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  placeholder="Search by JO No. or Location..."
                   className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none placeholder:text-gray-400 focus:border-black"
                 />
               </label>
 
-              <label className="block">
-                <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Date To</span>
-                <input
-                  type="date"
-                  value={dateToInput}
-                  onChange={(e) => setDateToInput(e.target.value)}
-                  className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-black"
-                />
-              </label>
+              <div className={`grid gap-3 lg:flex-[2] ${showStatusFilter ? 'lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]' : 'lg:grid-cols-[minmax(0,2fr)]'}`}>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="block">
+                    <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Date From</span>
+                    <input
+                      type="date"
+                      value={dateFromInput}
+                      onChange={(e) => setDateFromInput(e.target.value)}
+                      className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none placeholder:text-gray-400 focus:border-black"
+                    />
+                  </label>
 
-              {showStatusFilter ? (
-                <label className="block">
-                  <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Status</span>
-                  <select
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value)}
-                    className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-black"
-                  >
-                    {statusOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ) : null}
+                  <label className="block">
+                    <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Date To</span>
+                    <input
+                      type="date"
+                      value={dateToInput}
+                      onChange={(e) => setDateToInput(e.target.value)}
+                      className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-black"
+                    />
+                  </label>
+                </div>
+
+                {showStatusFilter ? (
+                  <label className="block lg:flex-[1]">
+                    <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Status</span>
+                    <select
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value)}
+                      className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-black"
+                    >
+                      {statusOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
+              </div>
             </div>
 
-            <div className="mt-4 flex items-center justify-between gap-3">
+            <div className="mt-4 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
               <button
                 type="button"
                 onClick={clearFilters}
@@ -575,7 +597,7 @@ export default function JOListPage({
               ) : (
                 <>
                   <div className="overflow-x-auto">
-                    <table className="min-w-full text-left text-sm">
+                    <table className="min-w-[780px] text-left text-sm">
                       <thead className="bg-[#FFF0F0] text-gray-700">
                         <tr>
                           <th className="px-4 py-3">JO No.</th>
@@ -587,17 +609,17 @@ export default function JOListPage({
                       </thead>
                       <tbody>
                         {rows.map((row) => {
-                          const canApprove = (row.status || '').toLowerCase() === 'for_approval' || statusFilter === 'for_approval'
+                          const status = (row.status || '').toLowerCase()
+                          const isDraft = status === 'draft'
+                          const canApprove = status === 'for_approval' || statusFilter === 'for_approval'
                           const technicianActions = isTechnicianView ? renderTechnicianActions(row) : null
                           return (
                             <tr key={row.id} className="border-t border-gray-100 align-top">
-                              <td className="px-4 py-4 font-medium text-black">{row.jo_number || 'TBD'}</td>
+                              <td className="px-4 py-4 font-medium text-black">{isDraft ? '—' : row.jo_number || '—'}</td>
                               <td className="px-4 py-4 text-gray-700">{row.location || '—'}</td>
-                              <td className="px-4 py-4 text-gray-700">{row.date || '—'}</td>
+                              <td className="px-4 py-4 text-gray-700">{formatDate(row.date)}</td>
                               <td className="px-4 py-4 text-gray-700">
-                                <div className="space-y-2">
-                                  <StatusBadge status={row.status} />
-                                </div>
+                                <JOStatusBadge status={row.status} technicianView={isTechnicianView} />
                               </td>
                               <td className="px-4 py-4">
                                 {isTechnicianView ? (
@@ -607,27 +629,44 @@ export default function JOListPage({
                                     <TableButton href={`/jo/${row.id}`} target="_blank" rel="noreferrer" tone="default">
                                       View
                                     </TableButton>
-                                    <TableButton href={`/jo/${row.id}/pdf`} target="_blank" rel="noreferrer" tone="default">
-                                      Download PDF
-                                    </TableButton>
-                                    {canApprove ? (
+                                    {isDraft ? (
                                       <>
+                                        <TableButton href={`/create-jo?draft_id=${row.id}`} tone="default">
+                                          Edit
+                                        </TableButton>
                                         <TableButton
                                           tone="success"
                                           disabled={actionLoadingId === row.id}
-                                          onClick={() => updateRowStatus(row.id, 'approve')}
+                                          onClick={() => handleSendDraftNow(row)}
                                         >
-                                          Approve
-                                        </TableButton>
-                                        <TableButton
-                                          tone="danger"
-                                          disabled={actionLoadingId === row.id}
-                                          onClick={() => handleReject(row.id)}
-                                        >
-                                          Reject
+                                          Send Now
                                         </TableButton>
                                       </>
-                                    ) : null}
+                                    ) : (
+                                      <>
+                                        <TableButton href={`/jo/${row.id}/pdf`} target="_blank" rel="noreferrer" tone="default">
+                                          Download PDF
+                                        </TableButton>
+                                        {canApprove ? (
+                                          <>
+                                            <TableButton
+                                              tone="success"
+                                              disabled={actionLoadingId === row.id}
+                                              onClick={() => updateRowStatus(row.id, 'approve')}
+                                            >
+                                              Approve
+                                            </TableButton>
+                                            <TableButton
+                                              tone="danger"
+                                              disabled={actionLoadingId === row.id}
+                                              onClick={() => handleReject(row.id)}
+                                            >
+                                              Reject
+                                            </TableButton>
+                                          </>
+                                        ) : null}
+                                      </>
+                                    )}
                                   </div>
                                 )}
                               </td>
