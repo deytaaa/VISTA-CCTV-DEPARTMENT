@@ -6,7 +6,7 @@ export default function ArchivePage() {
       title="Archived JOs"
       description="Approved and archived records for audit and reference."
       status="archived"
-      allowedRoles={['admin', 'supervisor']}
+      allowedRoles={['admin']}
     />
   )
 }

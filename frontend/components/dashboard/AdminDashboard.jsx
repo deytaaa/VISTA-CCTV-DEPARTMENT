@@ -19,7 +19,7 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || ''
 
 export default function AdminDashboard() {
   const { user, role } = useAuth()
-  const canCreateJo = role === 'admin' || role === 'dispatcher' || role === 'supervisor'
+  const canCreateJo = role === 'admin' || role === 'dispatcher'
   const [rows, setRows] = useState([])
   const [counts, setCounts] = useState({})
   const [loading, setLoading] = useState(true)

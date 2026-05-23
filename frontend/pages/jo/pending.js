@@ -6,7 +6,7 @@ export default function PendingJOsPage() {
       title="Pending JOs"
       description="Job Orders waiting for technician acknowledgement or assignment."
       status="pending"
-      allowedRoles={['admin', 'supervisor', 'technician']}
+      allowedRoles={['admin', 'technician']}
     />
   )
 }

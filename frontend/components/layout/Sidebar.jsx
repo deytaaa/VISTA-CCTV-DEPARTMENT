@@ -125,15 +125,15 @@ export default function Sidebar({ hidden = false, setHidden = () => {}, mobileOp
 
   const items = useMemo(
     () => [
-      { href: '/dashboard', label: 'Dashboard', roles: ['admin', 'technician', 'supervisor'] },
-      { href: '/jo/create', label: 'Create JO', roles: ['admin', 'supervisor'] },
-      { href: '/jo/sent', label: 'Sent JO', roles: ['admin', 'technician', 'supervisor'] },
-      { href: '/jo/pending', label: 'Pending JO', roles: ['admin', 'technician', 'supervisor'] },
-      { href: '/jo/processing', label: 'Processing JO', roles: ['admin', 'technician', 'supervisor'] },
-      { href: '/jo/completed', label: 'Completed JO', roles: ['admin', 'technician', 'supervisor'] },
-      { href: '/jo/approval', label: 'Approval Queue', roles: ['admin', 'supervisor'] },
-      { href: '/jo/archive', label: 'Archive', roles: ['admin', 'supervisor'] },
-      { href: '/logs', label: 'Activity Logs', roles: ['admin', 'supervisor'] },
+      { href: '/dashboard', label: 'Dashboard', roles: ['admin', 'technician'] },
+      { href: '/jo/create', label: 'Create JO', roles: ['admin'] },
+      { href: '/jo/sent', label: 'Sent JO', roles: ['admin', 'technician'] },
+      { href: '/jo/pending', label: 'Pending JO', roles: ['admin', 'technician'] },
+      { href: '/jo/processing', label: 'Processing JO', roles: ['admin', 'technician'] },
+      { href: '/jo/completed', label: 'Completed JO', roles: ['admin', 'technician'] },
+      { href: '/jo/approval', label: 'Approval Queue', roles: ['admin'] },
+      { href: '/jo/archive', label: 'Archive', roles: ['admin'] },
+      { href: '/logs', label: 'Activity Logs', roles: ['admin'] },
     ],
     []
   )

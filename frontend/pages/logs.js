@@ -1,11 +1,11 @@
-import JOListPage from '../components/jo/JOListPage'
+import ActivityLogsPage from '../components/logs/ActivityLogsPage'
 
 export default function LogsPage() {
   return (
-    <JOListPage
+    <ActivityLogsPage
       title="Activity Logs"
-      description="Audit trail of status changes and user actions."
-      allowedRoles={['admin', 'supervisor']}
+      description="Audit trail of every action performed in the system."
+      allowedRoles={['admin']}
     />
   )
 }

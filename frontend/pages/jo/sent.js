@@ -6,7 +6,7 @@ export default function SentJOsPage() {
       title="Sent JOs"
       description="Job Orders dispatched from the requesting office."
       status="sent"
-      allowedRoles={['admin', 'supervisor', 'technician']}
+      allowedRoles={['admin', 'technician']}
     />
   )
 }

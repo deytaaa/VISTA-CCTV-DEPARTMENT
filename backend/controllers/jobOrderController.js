@@ -15,16 +15,34 @@ function normalizeRpcJoNumber(rpcResult) {
 module.exports = {
   list: async (req, res) => {
     try {
-      const { status, page = 1, limit = 50 } = req.query;
+      const { status, page = 1, limit = 10, q, location, date } = req.query;
       const from = (Number(page) - 1) * Number(limit);
       const to = from + Number(limit) - 1;
 
-      let query = supabase.from('job_orders').select('*, job_order_items(*), job_order_personnel(*)').order('created_at', { ascending: false });
+      let query = supabase
+        .from('job_orders')
+        .select('*, job_order_items(*), job_order_personnel(*)', { count: 'exact' })
+        .order('created_at', { ascending: false });
+
       if (status) query = query.eq('status', status);
-      // apply range
-      const { data, error } = await query.range(from, to);
+      if (location) query = query.ilike('location', `%${location}%`);
+      if (date) query = query.eq('date', date);
+      if (q) {
+        query = query.or(
+          `jo_number.ilike.%${q}%,location.ilike.%${q}%,requestor_name.ilike.%${q}%`
+        );
+      }
+
+      const { data, error, count } = await query.range(from, to);
       if (error) return res.status(500).json({ error: error.message || error });
-      return res.json({ data });
+      return res.json({
+        data,
+        meta: {
+          page: Number(page),
+          limit: Number(limit),
+          total: count ?? (Array.isArray(data) ? data.length : 0),
+        },
+      });
     } catch (err) {
       console.error(err);
       return res.status(500).json({ error: 'Failed to list job orders' });

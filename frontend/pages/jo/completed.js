@@ -6,7 +6,7 @@ export default function CompletedJOsPage() {
       title="Completed JOs"
       description="Completed work awaiting admin approval."
       status="completed"
-      allowedRoles={['admin', 'supervisor', 'technician']}
+      allowedRoles={['admin', 'technician']}
     />
   )
 }

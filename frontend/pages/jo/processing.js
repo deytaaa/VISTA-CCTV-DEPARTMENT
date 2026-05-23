@@ -6,7 +6,7 @@ export default function ProcessingJOsPage() {
       title="Processing JOs"
       description="Work currently being performed, including items with rejection remarks."
       status="processing"
-      allowedRoles={['admin', 'supervisor', 'technician']}
+      allowedRoles={['admin', 'technician']}
     />
   )
 }

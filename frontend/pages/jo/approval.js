@@ -6,7 +6,7 @@ export default function ApprovalQueuePage() {
       title="Approval Queue"
       description="Completed JOs waiting for admin review and approval."
       status="for_approval"
-      allowedRoles={['admin', 'supervisor']}
+      allowedRoles={['admin']}
     />
   )
 }
