@@ -9,5 +9,7 @@ router.get('/:id', authMiddleware, jobOrderController.getById);
 router.post('/', authMiddleware, requireAnyRole(['admin','dispatcher']), jobOrderController.create);
 router.put('/:id', authMiddleware, requireAnyRole(['admin','dispatcher']), jobOrderController.update);
 router.delete('/:id', authMiddleware, requireAnyRole(['admin']), jobOrderController.delete);
+router.post('/:id/processing', authMiddleware, requireAnyRole(['technician']), jobOrderController.markProcessing);
+router.post('/:id/complete', authMiddleware, requireAnyRole(['technician']), jobOrderController.markCompleted);
 
 module.exports = router;

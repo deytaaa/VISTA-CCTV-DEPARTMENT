@@ -53,7 +53,7 @@ function StatusBadge({ status }) {
   return <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ring-1 ${meta.className}`}>{meta.label}</span>
 }
 
-function EmptyState() {
+function EmptyState({ title, description }) {
   return (
     <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-gray-200 bg-gray-50 px-6 py-14 text-center">
       <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-gray-400 ring-1 ring-gray-200">
@@ -62,8 +62,8 @@ function EmptyState() {
           <circle cx="12" cy="12" r="9" strokeWidth="2" />
         </svg>
       </div>
-      <h3 className="mt-4 text-lg font-bold text-black">No job orders found.</h3>
-      <p className="mt-1 max-w-md text-sm text-gray-500">Created Job Orders will appear here.</p>
+      <h3 className="mt-4 text-lg font-bold text-black">{title}</h3>
+      <p className="mt-1 max-w-md text-sm text-gray-500">{description}</p>
     </div>
   )
 }
@@ -93,8 +93,30 @@ function TableButton({ children, href, onClick, tone = 'default', disabled = fal
   )
 }
 
-export default function JOListPage({ title, description, status = null, allowedRoles = ['admin', 'technician'] }) {
+function getLatestCompletionReport(row) {
+  if (!Array.isArray(row?.completion_reports) || row.completion_reports.length === 0) return null
+
+  return [...row.completion_reports].sort((left, right) => {
+    const leftTime = new Date(left?.completed_at || 0).getTime()
+    const rightTime = new Date(right?.completed_at || 0).getTime()
+    return rightTime - leftTime
+  })[0]
+}
+
+export default function JOListPage({
+  title,
+  description,
+  status = null,
+  allowedRoles = ['admin', 'technician'],
+  viewMode = 'admin',
+  receiverId = null,
+  statusIn = null,
+  showStatusFilter = true,
+  emptyTitle = 'No job orders found.',
+  emptyDescription = 'Created Job Orders will appear here.',
+}) {
   const { session, user } = useAuth()
+  const isTechnicianView = viewMode === 'technician'
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -110,10 +132,18 @@ export default function JOListPage({ title, description, status = null, allowedR
   const [dateToInput, setDateToInput] = useState('')
 
   const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [proofJobOrder, setProofJobOrder] = useState(null)
+  const [proofFile, setProofFile] = useState(null)
+  const [proofRemarks, setProofRemarks] = useState('')
+  const [proofLoading, setProofLoading] = useState(false)
+  const [proofError, setProofError] = useState('')
 
   const totalPages = useMemo(() => Math.max(1, Math.ceil((total || 0) / limit)), [limit, total])
   const startRow = total === 0 ? 0 : (page - 1) * limit + 1
   const endRow = Math.min(page * limit, total)
+  const filterGridClass = showStatusFilter
+    ? 'grid gap-3 xl:grid-cols-[minmax(0,2fr)_repeat(3,minmax(0,1fr))]'
+    : 'grid gap-3 xl:grid-cols-[minmax(0,2fr)_repeat(2,minmax(0,1fr))]'
 
   useEffect(() => {
     const handle = setTimeout(() => setDebouncedSearch(searchInput.trim()), 300)
@@ -138,7 +168,12 @@ export default function JOListPage({ title, description, status = null, allowedR
         params.set('page', String(page))
         params.set('limit', String(limit))
 
-        if (statusFilter && statusFilter !== 'all') params.set('status', statusFilter)
+        const effectiveReceiverId = receiverId || (isTechnicianView ? user?.id : null)
+        const effectiveStatusIn = statusIn || (isTechnicianView ? 'sent,processing,completed,for_approval' : null)
+
+        if (effectiveReceiverId) params.set('receiver_id', effectiveReceiverId)
+        if (effectiveStatusIn) params.set('status_in', effectiveStatusIn)
+        if (showStatusFilter && statusFilter && statusFilter !== 'all') params.set('status', statusFilter)
         if (debouncedSearch) params.set('q', debouncedSearch)
         if (dateFromInput) params.set('date_from', dateFromInput)
         if (dateToInput) params.set('date_to', dateToInput)
@@ -178,7 +213,188 @@ export default function JOListPage({ title, description, status = null, allowedR
     return () => {
       mounted = false
     }
-  }, [debouncedSearch, dateFromInput, dateToInput, limit, page, refreshTick, session?.access_token, statusFilter])
+  }, [
+    debouncedSearch,
+    dateFromInput,
+    dateToInput,
+    isTechnicianView,
+    limit,
+    page,
+    refreshTick,
+    receiverId,
+    session?.access_token,
+    showStatusFilter,
+    statusFilter,
+    statusIn,
+    user?.id,
+  ])
+
+  async function technicianRequest(path) {
+    if (!session?.access_token) return
+
+    setError(null)
+    setActionLoadingId(path.id)
+
+    try {
+      const response = await fetch(`${API_BASE_URL}${path.url}`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      })
+
+      const payload = await response.json()
+
+      if (!response.ok) {
+        throw new Error(payload?.error || 'Failed to update job order')
+      }
+
+      setRefreshTick((value) => value + 1)
+    } catch (requestError) {
+      setError(requestError.message)
+    } finally {
+      setActionLoadingId(null)
+    }
+  }
+
+  function handleMarkProcessing(jobOrderId) {
+    technicianRequest({ id: jobOrderId, url: `/api/job-orders/${jobOrderId}/processing` })
+  }
+
+  function handleMarkCompleted(jobOrderId) {
+    technicianRequest({ id: jobOrderId, url: `/api/job-orders/${jobOrderId}/complete` })
+  }
+
+  function openProofModal(row) {
+    setProofJobOrder(row)
+    setProofFile(null)
+    setProofRemarks('')
+    setProofError('')
+  }
+
+  function closeProofModal() {
+    if (proofLoading) return
+    setProofJobOrder(null)
+    setProofFile(null)
+    setProofRemarks('')
+    setProofError('')
+  }
+
+  async function submitProof() {
+    if (!proofJobOrder || !session?.access_token || !user?.id) return
+
+    if (!proofFile) {
+      setProofError('Please select a proof file.')
+      return
+    }
+    const allowedTypes = ['image/jpeg', 'image/png', 'application/pdf']
+    if (!allowedTypes.includes(proofFile.type)) {
+      setProofError('Only JPG, PNG, and PDF files are allowed.')
+      return
+    }
+
+    if (proofFile.size > 5 * 1024 * 1024) {
+      setProofError('Proof file must be 5MB or smaller.')
+      return
+    }
+
+    setProofLoading(true)
+    setProofError('')
+
+    try {
+      const formData = new FormData()
+      formData.append('file', proofFile)
+
+      const uploadResponse = await fetch(`${API_BASE_URL}/api/jo/upload-proof`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: formData,
+      })
+
+      const uploadPayload = await uploadResponse.json()
+      if (!uploadResponse.ok) {
+        throw new Error(uploadPayload?.error || 'Failed to upload proof file')
+      }
+
+      const completionResponse = await fetch(`${API_BASE_URL}/api/completion`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          job_order_id: proofJobOrder.id,
+          proof_file: uploadPayload?.publicURL || uploadPayload?.path,
+          remarks: proofRemarks.trim(),
+          completed_by: user.id,
+          completed_at: new Date().toISOString(),
+        }),
+      })
+
+      const completionPayload = await completionResponse.json()
+      if (!completionResponse.ok) {
+        throw new Error(completionPayload?.error || 'Failed to save completion proof')
+      }
+
+      setRefreshTick((value) => value + 1)
+      closeProofModal()
+    } catch (proofUploadError) {
+      setProofError(proofUploadError.message)
+    } finally {
+      setProofLoading(false)
+    }
+  }
+
+  function renderTechnicianActions(row) {
+    const status = (row.status || '').toLowerCase()
+    const latestCompletion = getLatestCompletionReport(row)
+    const hasProof = Boolean(latestCompletion?.proof_file)
+
+    const pdfActions = (
+      <>
+        <TableButton href={`/jo/${row.id}`} target="_blank" rel="noreferrer" tone="default">
+          View
+        </TableButton>
+        <TableButton href={`/jo/${row.id}/pdf`} target="_blank" rel="noreferrer" tone="default">
+          Download PDF
+        </TableButton>
+      </>
+    )
+
+    if (status === 'sent') {
+      return (
+        <div className="flex flex-wrap gap-2">
+          {pdfActions}
+          <TableButton tone="primary" disabled={actionLoadingId === row.id} onClick={() => handleMarkProcessing(row.id)}>
+            Mark as Processing
+          </TableButton>
+        </div>
+      )
+    }
+
+    if (status === 'processing') {
+      return (
+        <div className="flex flex-wrap gap-2">
+          {pdfActions}
+          <TableButton tone="default" disabled={actionLoadingId === row.id} onClick={() => openProofModal(row)}>
+            Upload Proof
+          </TableButton>
+          <TableButton tone="success" disabled={actionLoadingId === row.id} onClick={() => handleMarkCompleted(row.id)}>
+            Mark as Completed
+          </TableButton>
+          {hasProof ? <span className="inline-flex items-center rounded-full bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">Proof uploaded</span> : null}
+        </div>
+      )
+    }
+
+    return (
+      <div className="flex flex-wrap gap-2">
+        {pdfActions}
+      </div>
+    )
+  }
 
   async function updateRowStatus(jobOrderId, action, remarks = '') {
     if (!session?.access_token) return
@@ -229,7 +445,7 @@ export default function JOListPage({ title, description, status = null, allowedR
     setSearchInput('')
     setDateFromInput('')
     setDateToInput('')
-    setStatusFilter(status || 'all')
+    if (showStatusFilter) setStatusFilter(status || 'all')
     setPage(1)
   }
 
@@ -240,7 +456,7 @@ export default function JOListPage({ title, description, status = null, allowedR
           {description ? <p className="text-sm text-gray-600">{description}</p> : null}
 
           <div className="rounded-[24px] border border-gray-200 bg-white p-5 shadow-sm">
-            <div className="grid gap-3 xl:grid-cols-[minmax(0,2fr)_repeat(3,minmax(0,1fr))]">
+            <div className={filterGridClass}>
               <div className="space-y-3">
                 <label className="block">
                   <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Search JO No. / Location</span>
@@ -273,20 +489,22 @@ export default function JOListPage({ title, description, status = null, allowedR
                 />
               </label>
 
-              <label className="block">
-                <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Status</span>
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-black"
-                >
-                  {STATUS_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              {showStatusFilter ? (
+                <label className="block">
+                  <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Status</span>
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                    className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-black"
+                  >
+                    {STATUS_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
             </div>
 
             <div className="mt-4 flex items-center justify-between gap-3">
@@ -309,7 +527,7 @@ export default function JOListPage({ title, description, status = null, allowedR
 
             {!loading && !error ? (
               rows.length === 0 ? (
-                <EmptyState />
+                <EmptyState title={emptyTitle} description={emptyDescription} />
               ) : (
                 <>
                   <div className="overflow-x-auto">
@@ -326,6 +544,7 @@ export default function JOListPage({ title, description, status = null, allowedR
                       <tbody>
                         {rows.map((row) => {
                           const canApprove = (row.status || '').toLowerCase() === 'for_approval' || statusFilter === 'for_approval'
+                          const technicianActions = isTechnicianView ? renderTechnicianActions(row) : null
                           return (
                             <tr key={row.id} className="border-t border-gray-100 align-top">
                               <td className="px-4 py-4 font-medium text-black">{row.jo_number || 'TBD'}</td>
@@ -338,32 +557,36 @@ export default function JOListPage({ title, description, status = null, allowedR
                                 </div>
                               </td>
                               <td className="px-4 py-4">
-                                <div className="flex flex-wrap gap-2">
-                                  <TableButton href={`/jo/${row.id}/pdf`} target="_blank" rel="noreferrer" tone="default">
-                                    View
-                                  </TableButton>
-                                  <TableButton href={`/jo/${row.id}/pdf`} target="_blank" rel="noreferrer" tone="default">
-                                    Download PDF
-                                  </TableButton>
-                                  {canApprove ? (
-                                    <>
-                                      <TableButton
-                                        tone="success"
-                                        disabled={actionLoadingId === row.id}
-                                        onClick={() => updateRowStatus(row.id, 'approve')}
-                                      >
-                                        Approve
-                                      </TableButton>
-                                      <TableButton
-                                        tone="danger"
-                                        disabled={actionLoadingId === row.id}
-                                        onClick={() => handleReject(row.id)}
-                                      >
-                                        Reject
-                                      </TableButton>
-                                    </>
-                                  ) : null}
-                                </div>
+                                {isTechnicianView ? (
+                                  technicianActions
+                                ) : (
+                                  <div className="flex flex-wrap gap-2">
+                                    <TableButton href={`/jo/${row.id}/pdf`} target="_blank" rel="noreferrer" tone="default">
+                                      View
+                                    </TableButton>
+                                    <TableButton href={`/jo/${row.id}/pdf`} target="_blank" rel="noreferrer" tone="default">
+                                      Download PDF
+                                    </TableButton>
+                                    {canApprove ? (
+                                      <>
+                                        <TableButton
+                                          tone="success"
+                                          disabled={actionLoadingId === row.id}
+                                          onClick={() => updateRowStatus(row.id, 'approve')}
+                                        >
+                                          Approve
+                                        </TableButton>
+                                        <TableButton
+                                          tone="danger"
+                                          disabled={actionLoadingId === row.id}
+                                          onClick={() => handleReject(row.id)}
+                                        >
+                                          Reject
+                                        </TableButton>
+                                      </>
+                                    ) : null}
+                                  </div>
+                                )}
                               </td>
                             </tr>
                           )
@@ -399,6 +622,54 @@ export default function JOListPage({ title, description, status = null, allowedR
               )
             ) : null}
           </div>
+
+          {proofJobOrder ? (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6">
+              <div className="w-full max-w-lg rounded-[24px] bg-white p-6 shadow-2xl">
+                <div className="mb-4 flex items-start justify-between gap-4">
+                  <div>
+                    <h3 className="text-lg font-bold text-black">Upload Proof</h3>
+                    <p className="text-sm text-gray-500">{proofJobOrder.jo_number || 'Job Order'} - {proofJobOrder.location || 'No location'}</p>
+                  </div>
+                  <button type="button" onClick={closeProofModal} className="rounded-full border border-gray-200 px-3 py-1 text-sm font-semibold text-black">
+                    Close
+                  </button>
+                </div>
+
+                {proofError ? <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{proofError}</div> : null}
+
+                <label className="mb-4 block">
+                  <span className="mb-2 block text-sm font-semibold text-black">Proof File</span>
+                  <input
+                    type="file"
+                    accept=".jpg,.jpeg,.png,.pdf"
+                    onChange={(e) => setProofFile(e.target.files?.[0] || null)}
+                    className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm text-black outline-none"
+                  />
+                </label>
+
+                <label className="mb-5 block">
+                  <span className="mb-2 block text-sm font-semibold text-black">Completion Remarks</span>
+                  <textarea
+                    value={proofRemarks}
+                    onChange={(e) => setProofRemarks(e.target.value)}
+                    rows={4}
+                    className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-black"
+                    placeholder="Add completion remarks"
+                  />
+                </label>
+
+                <div className="flex items-center justify-end gap-3">
+                  <button type="button" onClick={closeProofModal} disabled={proofLoading} className="rounded-2xl border border-gray-200 px-4 py-2 text-sm font-semibold text-black disabled:cursor-not-allowed disabled:opacity-60">
+                    Cancel
+                  </button>
+                  <button type="button" onClick={submitProof} disabled={proofLoading} className="rounded-2xl bg-taguigRed px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">
+                    {proofLoading ? 'Uploading...' : 'Save Proof'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
         </div>
       </Layout>
     </ProtectedRoute>

@@ -33,12 +33,12 @@ function CreateIcon() {
   )
 }
 
-function JobOrdersIcon() {
+function SendIcon() {
   return (
     <IconWrapper>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-5 w-5">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 7h16M4 12h16M4 17h10" />
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 4h8v6H8z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M22 2L11 13" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M22 2l-7 20-4-9-9-4 20-7z" />
       </svg>
     </IconWrapper>
   )
@@ -110,7 +110,10 @@ function LogsIcon() {
 const iconByHref = {
   '/dashboard': DashboardIcon,
   '/jo/create': CreateIcon,
-  '/jo': JobOrdersIcon,
+  '/jo/sent': SendIcon,
+  '/jo/pending': PendingIcon,
+  '/jo/processing': ProcessingIcon,
+  '/jo/completed': CompletedIcon,
   '/jo/approval': ApprovalIcon,
   '/jo/archive': ArchiveIcon,
   '/logs': LogsIcon,
@@ -124,7 +127,10 @@ export default function Sidebar({ hidden = false, setHidden = () => {}, mobileOp
     () => [
       { href: '/dashboard', label: 'Dashboard', roles: ['admin', 'technician'] },
       { href: '/jo/create', label: 'Create JO', roles: ['admin'] },
-      { href: '/jo', label: 'Job Orders', roles: ['admin', 'technician'] },
+      { href: '/jo/sent', label: 'Sent JO', roles: ['admin', 'technician'] },
+      { href: '/jo/pending', label: 'Pending JO', roles: ['admin', 'technician'] },
+      { href: '/jo/processing', label: 'Processing JO', roles: ['admin', 'technician'] },
+      { href: '/jo/completed', label: 'Completed JO', roles: ['admin', 'technician'] },
       { href: '/jo/approval', label: 'Approval Queue', roles: ['admin'] },
       { href: '/jo/archive', label: 'Archive', roles: ['admin'] },
       { href: '/logs', label: 'Activity Logs', roles: ['admin'] },

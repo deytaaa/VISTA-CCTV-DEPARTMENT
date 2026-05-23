@@ -33,11 +33,6 @@ module.exports = {
       const { data, error } = await supabase.from('completion_reports').insert(payload).select('*');
       if (error) return res.status(500).json({ error: error.message || error });
 
-      // Optionally update job order status to 'completed'
-      if (payload.job_order_id) {
-        await supabase.from('job_orders').update({ status: 'completed' }).eq('id', payload.job_order_id);
-      }
-
       return res.status(201).json({ data });
     } catch (err) {
       console.error(err);

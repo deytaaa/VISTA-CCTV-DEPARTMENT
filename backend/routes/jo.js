@@ -3,6 +3,8 @@ const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
 const supabase = require('../lib/supabase');
+const { authMiddleware } = require('../middleware/auth');
+const { requireAnyRole } = require('../middleware/roleMiddleware');
 const router = express.Router();
 
 const SEQ_FILE = path.join(__dirname, '..', 'jo-sequence.json');
@@ -69,7 +71,7 @@ router.post('/generate', async (req, res) => {
   }
 });
 
-router.post('/upload-proof', upload.single('file'), async (req, res) => {
+router.post('/upload-proof', authMiddleware, requireAnyRole(['admin', 'technician']), upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   // Validate MIME types
   const allowed = ['image/jpeg', 'image/png', 'application/pdf'];

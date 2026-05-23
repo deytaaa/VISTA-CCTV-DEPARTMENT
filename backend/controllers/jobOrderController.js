@@ -15,16 +15,25 @@ function normalizeRpcJoNumber(rpcResult) {
 module.exports = {
   list: async (req, res) => {
     try {
-      const { status, page = 1, limit = 10, q, location, date, date_from, date_to } = req.query;
+      const { status, status_in, receiver_id, page = 1, limit = 10, q, location, date, date_from, date_to } = req.query;
       const from = (Number(page) - 1) * Number(limit);
       const to = from + Number(limit) - 1;
+      const technicianReceiverId = receiver_id || (req.user?.role === 'technician' ? req.user.id : null);
 
       let query = supabase
         .from('job_orders')
         .select('*, job_order_items(*), job_order_personnel(*), completion_reports(*)', { count: 'exact' })
         .order('created_at', { ascending: false });
 
+      if (technicianReceiverId) query = query.eq('receiver_id', technicianReceiverId);
       if (status) query = query.eq('status', status);
+      if (status_in) {
+        const statuses = String(status_in)
+          .split(',')
+          .map((value) => value.trim())
+          .filter(Boolean);
+        if (statuses.length > 0) query = query.in('status', statuses);
+      }
       if (location) query = query.ilike('location', `%${location}%`);
       if (date) query = query.eq('date', date);
       if (date_from) query = query.gte('date', date_from);
@@ -158,6 +167,115 @@ module.exports = {
     } catch (err) {
       console.error(err);
       return res.status(500).json({ error: 'Failed to delete job order' });
+    }
+  }
+,
+
+  markProcessing: async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      const { data: current, error: currentError } = await supabase
+        .from('job_orders')
+        .select('id, jo_number, status, receiver_id')
+        .eq('id', id)
+        .single();
+
+      if (currentError || !current) {
+        return res.status(404).json({ error: currentError?.message || 'Job order not found' });
+      }
+
+      if (req.user?.role !== 'technician') {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
+
+      if (current.receiver_id && current.receiver_id !== req.user.id) {
+        return res.status(403).json({ error: 'This job order is not assigned to you' });
+      }
+
+      if (current.status !== 'sent') {
+        return res.status(400).json({ error: 'Only sent job orders can be marked as processing' });
+      }
+
+      const { data, error } = await supabase
+        .from('job_orders')
+        .update({ status: 'processing' })
+        .eq('id', id)
+        .select('*')
+        .single();
+
+      if (error) return res.status(500).json({ error: error.message || error });
+
+      await supabase.from('activity_logs').insert({
+        user_id: req.user.id,
+        action: 'Marked as Processing',
+        job_order_id: id,
+      });
+
+      return res.json({ data });
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ error: 'Failed to mark job order as processing' });
+    }
+  },
+
+  markCompleted: async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      if (req.user?.role !== 'technician') {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
+
+      const { data: current, error: currentError } = await supabase
+        .from('job_orders')
+        .select('id, jo_number, status, receiver_id')
+        .eq('id', id)
+        .single();
+
+      if (currentError || !current) {
+        return res.status(404).json({ error: currentError?.message || 'Job order not found' });
+      }
+
+      if (current.receiver_id && current.receiver_id !== req.user.id) {
+        return res.status(403).json({ error: 'This job order is not assigned to you' });
+      }
+
+      const { data: reports, error: reportError } = await supabase
+        .from('completion_reports')
+        .select('id, proof_file, completed_at')
+        .eq('job_order_id', id)
+        .order('completed_at', { ascending: false })
+        .limit(1);
+
+      if (reportError) {
+        return res.status(500).json({ error: reportError.message || reportError });
+      }
+
+      const latestReport = Array.isArray(reports) ? reports[0] : null;
+      if (!latestReport?.proof_file) {
+        return res.status(400).json({ error: 'Please upload signed JO proof before marking as completed' });
+      }
+
+      const { data, error } = await supabase
+        .from('job_orders')
+        .update({ status: 'for_approval' })
+        .eq('id', id)
+        .select('*')
+        .single();
+
+      if (error) return res.status(500).json({ error: error.message || error });
+
+      await supabase.from('activity_logs').insert({
+        user_id: req.user.id,
+        action: 'Marked as Completed',
+        job_order_id: id,
+      });
+
+      return res.json({ data });
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ error: 'Failed to mark job order as completed' });
     }
   }
 };

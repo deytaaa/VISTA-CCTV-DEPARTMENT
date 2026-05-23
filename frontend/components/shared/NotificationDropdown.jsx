@@ -13,6 +13,14 @@ function formatDate(value) {
   }
 }
 
+function formatAlertText(item) {
+  if ((item?.action || '').toLowerCase() === 'marked as completed') {
+    return `JO ${item?.job_order?.jo_number || item?.job_order_id || '—'} has been completed and is awaiting your approval`
+  }
+
+  return item?.action || 'Activity update'
+}
+
 export default function NotificationDropdown() {
   const { session } = useAuth()
   const [open, setOpen] = useState(false)
@@ -85,10 +93,10 @@ export default function NotificationDropdown() {
               items.map((item) => (
                 <div key={item.id} className="rounded-2xl border border-gray-100 bg-gray-50 px-3 py-3">
                   <div className="flex items-start justify-between gap-3">
-                    <p className="text-sm font-semibold text-black">{item.action}</p>
+                    <p className="text-sm font-semibold text-black">{formatAlertText(item)}</p>
                     <span className="text-[11px] text-gray-500">{formatDate(item.timestamp)}</span>
                   </div>
-                  {item.job_order_id ? <p className="mt-1 text-xs text-gray-500">JO: {item.job_order_id}</p> : null}
+                  {item.job_order_id ? <p className="mt-1 text-xs text-gray-500">JO: {item.job_order?.jo_number || item.job_order_id}</p> : null}
                 </div>
               ))
             )}

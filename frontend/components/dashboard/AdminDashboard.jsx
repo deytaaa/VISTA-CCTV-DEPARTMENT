@@ -129,17 +129,7 @@ export default function AdminDashboard() {
 
   return (
     <ProtectedRoute>
-      <Layout
-        title="VISTA CCTV — Admin Console"
-        subtitle="Dashboard"
-        actions={
-          <div className="flex items-center gap-3">
-            <button onClick={handleSignOut} className="rounded-2xl border border-gray-200 px-4 py-2 text-sm font-semibold text-black">
-              Sign out
-            </button>
-          </div>
-        }
-      >
+      <Layout title="VISTA CCTV — Admin Console" subtitle="Dashboard">
         <div className="mx-auto max-w-6xl">
           {error ? <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
 

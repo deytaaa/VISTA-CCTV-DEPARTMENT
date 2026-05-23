@@ -4,12 +4,15 @@ import Layout from '../components/layout/Layout'
 import { useAuth } from '../context/AuthContext'
 
 export default function CreateJO() {
-  const { session } = useAuth()
+  const { session, user } = useAuth()
   const [joNumber, setJoNumber] = useState('');
   const [date, setDate] = useState('');
   const [location, setLocation] = useState('');
   const [items, setItems] = useState([{ item_no: 1, item_name: '', reference_no: '', quantity: '' }])
   const [personnel, setPersonnel] = useState([{ personnel_no: 1, name: '' }])
+  const [technicians, setTechnicians] = useState([])
+  const [selectedTechnicianId, setSelectedTechnicianId] = useState('')
+  const [techniciansLoading, setTechniciansLoading] = useState(true)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
@@ -44,6 +47,51 @@ export default function CreateJO() {
     }
   }, [])
 
+  useEffect(() => {
+    let active = true
+
+    async function loadTechnicians() {
+      try {
+        if (!session?.access_token) return
+
+        setTechniciansLoading(true)
+
+        const base = process.env.NEXT_PUBLIC_API_URL || ''
+        const res = await fetch(`${base}/api/users/technicians`, {
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        })
+
+        const payload = await res.json()
+
+        if (!res.ok) {
+          throw new Error(payload?.error || 'Failed to load technicians')
+        }
+
+        if (!active) return
+
+        const list = Array.isArray(payload?.data) ? payload.data : []
+        setTechnicians(list)
+        if (list.length > 0) {
+          setSelectedTechnicianId((current) => current || list[0].id)
+        }
+      } catch (fetchError) {
+        if (active) {
+          setError(fetchError.message)
+        }
+      } finally {
+        if (active) setTechniciansLoading(false)
+      }
+    }
+
+    loadTechnicians()
+
+    return () => {
+      active = false
+    }
+  }, [session?.access_token])
+
   const addItem = () => setItems([...items, { item_no: items.length + 1, item_name: '', reference_no: '', quantity: '' }])
   const removeItem = (i) => setItems(items.filter((_, idx) => idx !== i))
   const addPerson = () => setPersonnel([...personnel, { personnel_no: personnel.length + 1, name: '' }])
@@ -62,6 +110,12 @@ export default function CreateJO() {
     setSuccess('')
     setLoading(true)
 
+    if (!selectedTechnicianId) {
+      setError('Please assign this job order to a technician.')
+      setLoading(false)
+      return
+    }
+
     try {
       const base = process.env.NEXT_PUBLIC_API_URL || ''
       const headers = { 'Content-Type': 'application/json' }
@@ -78,6 +132,8 @@ export default function CreateJO() {
           date,
           location,
           status,
+          sender_id: user?.id || null,
+          receiver_id: selectedTechnicianId,
           items,
           personnel,
         }),
@@ -110,7 +166,7 @@ export default function CreateJO() {
             {error ? <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
             {success ? <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{success}</div> : null}
 
-            <div className="mt-6 grid gap-5 lg:grid-cols-3">
+            <div className="mt-6 grid gap-5 lg:grid-cols-4">
               <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4">
                 <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">JO Number</label>
                 <input value={joNumber} readOnly className="w-full border-0 bg-transparent text-sm font-semibold text-black outline-none" />
@@ -125,6 +181,24 @@ export default function CreateJO() {
               <div className="rounded-2xl border border-gray-200 bg-white px-4 py-4">
                 <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Location</label>
                 <input value={location} onChange={(e) => setLocation(e.target.value)} type="text" placeholder="Enter location" className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-black outline-none placeholder:text-gray-400 focus:border-black" />
+              </div>
+
+              <div className="rounded-2xl border border-gray-200 bg-white px-4 py-4">
+                <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Assign To</label>
+                <select
+                  value={selectedTechnicianId}
+                  onChange={(e) => setSelectedTechnicianId(e.target.value)}
+                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-black outline-none focus:border-black"
+                  disabled={techniciansLoading}
+                >
+                  <option value="">{techniciansLoading ? 'Loading technicians...' : 'Select a technician'}</option>
+                  {technicians.map((technician) => (
+                    <option key={technician.id} value={technician.id}>
+                      {technician.name || technician.email} ({technician.email})
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-2 text-xs text-gray-500">Choose the technician who will receive this job order.</p>
               </div>
             </div>
           </div>
