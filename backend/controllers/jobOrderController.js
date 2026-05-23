@@ -22,7 +22,7 @@ module.exports = {
 
       let query = supabase
         .from('job_orders')
-        .select('*, job_order_items(*), job_order_personnel(*), completion_reports(*)', { count: 'exact' })
+        .select('*, sender:users!job_orders_sender_id_fkey(id, name, email, role), receiver:users!job_orders_receiver_id_fkey(id, name, email, role), job_order_items(*), job_order_personnel(*), completion_reports(*)', { count: 'exact' })
         .order('created_at', { ascending: false });
 
       if (technicianReceiverId) query = query.eq('receiver_id', technicianReceiverId);
@@ -65,7 +65,7 @@ module.exports = {
       const { id } = req.params;
       const { data, error } = await supabase
         .from('job_orders')
-        .select('*, job_order_items(*), job_order_personnel(*), completion_reports(*)')
+        .select('*, sender:users!job_orders_sender_id_fkey(id, name, email, role), receiver:users!job_orders_receiver_id_fkey(id, name, email, role), job_order_items(*), job_order_personnel(*), completion_reports(*)')
         .eq('id', id)
         .single();
       if (error) return res.status(404).json({ error: error.message || error });

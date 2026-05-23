@@ -220,7 +220,7 @@ export default function ArchiveListPage({ title, description, allowedRoles = ['a
                             <td className="px-4 py-4 text-gray-700">{formatDateTime(row.updated_at || row.created_at)}</td>
                             <td className="px-4 py-4">
                               <div className="flex flex-wrap gap-2">
-                                <TableButton href={`/jo/${row.id}/pdf`} target="_blank" rel="noreferrer" tone="default">
+                                <TableButton href={`/jo/${row.id}`} target="_blank" rel="noreferrer" tone="default">
                                   View
                                 </TableButton>
                                 <TableButton href={`/jo/${row.id}/pdf`} target="_blank" rel="noreferrer" tone="default">

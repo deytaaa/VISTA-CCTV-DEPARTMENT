@@ -41,8 +41,15 @@ module.exports = {
       if (newStatus) {
         const { data, error } = await supabase.from('job_orders').update({ status: newStatus, rejection_remarks: action === 'reject' ? remarks : null }).eq('id', job_order_id).select('*').single();
         if (error) return res.status(500).json({ error: error.message || error });
+        const activityAction =
+          action === 'request_approval'
+            ? 'Proof re-uploaded and submitted for approval'
+            : action === 'approve'
+              ? 'Job order approved'
+              : 'Job order rejected'
+
         // log activity
-        await supabase.from('activity_logs').insert({ user_id: approved_by || null, action: `Approval action: ${action}`, job_order_id });
+        await supabase.from('activity_logs').insert({ user_id: approved_by || null, action: activityAction, job_order_id });
         return res.json({ data });
       }
 

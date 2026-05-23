@@ -175,7 +175,7 @@ begin
     insert into public.activity_logs(user_id, action, job_order_id, timestamp)
     values (
       new.sender_id,
-      format('Job Order created with status %s', new.status),
+      format('New Job Order %s has been assigned to you.', coalesce(new.jo_number, new.id::text)),
       new.id,
       now()
     );

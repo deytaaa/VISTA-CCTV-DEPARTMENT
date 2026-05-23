@@ -25,6 +25,28 @@ export default function TechnicianDashboard() {
 
   const statusCounts = useMemo(() => counts, [counts])
 
+  function formatDate(value) {
+    if (!value) return '—'
+    try {
+      return new Date(value).toLocaleDateString('en-US', {
+        month: '2-digit',
+        day: '2-digit',
+        year: 'numeric',
+      })
+    } catch {
+      return '—'
+    }
+  }
+
+  function StatusBadge({ value }) {
+    const label = value ? value.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase()) : '—'
+    return (
+      <span className="inline-flex rounded-full bg-sky-100 px-3 py-1 text-xs font-semibold text-sky-700 ring-1 ring-sky-200">
+        {label}
+      </span>
+    )
+  }
+
   useEffect(() => {
     let mounted = true
 
@@ -92,15 +114,7 @@ export default function TechnicianDashboard() {
 
   return (
     <ProtectedRoute allowedRoles={['technician']}>
-      <Layout
-        title="Technician Console"
-        subtitle="Dashboard"
-        actions={
-          <Link href="/jo" className="rounded-2xl border border-gray-200 px-4 py-2 text-sm font-semibold text-black">
-            My Job Orders
-          </Link>
-        }
-      >
+      <Layout title="Technician Console" subtitle="Dashboard">
         <div className="mx-auto max-w-6xl space-y-6">
           {error ? <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
 
@@ -127,19 +141,20 @@ export default function TechnicianDashboard() {
                   <tr>
                     <th className="px-4 py-3">JO No.</th>
                     <th className="px-4 py-3">Location</th>
+                    <th className="px-4 py-3">Date</th>
                     <th className="px-4 py-3">Status</th>
                   </tr>
                 </thead>
                 <tbody>
                   {loading ? (
                     <tr className="border-t border-gray-100">
-                      <td className="px-4 py-4 text-gray-500" colSpan={3}>
+                      <td className="px-4 py-4 text-gray-500" colSpan={4}>
                         Loading assigned work...
                       </td>
                     </tr>
                   ) : rows.length === 0 ? (
                     <tr className="border-t border-gray-100">
-                      <td className="px-4 py-4 text-gray-500" colSpan={3}>
+                      <td className="px-4 py-4 text-gray-500" colSpan={4}>
                         No assigned job orders yet.
                       </td>
                     </tr>
@@ -148,7 +163,8 @@ export default function TechnicianDashboard() {
                       <tr key={row.id} className="border-t border-gray-100">
                         <td className="px-4 py-3 font-medium text-black">{row.jo_number || 'TBD'}</td>
                         <td className="px-4 py-3 text-gray-700">{row.location || '—'}</td>
-                        <td className="px-4 py-3 text-gray-700">{row.status || '—'}</td>
+                        <td className="px-4 py-3 text-gray-700">{formatDate(row.date)}</td>
+                        <td className="px-4 py-3 text-gray-700"><StatusBadge value={row.status} /></td>
                       </tr>
                     ))
                   )}

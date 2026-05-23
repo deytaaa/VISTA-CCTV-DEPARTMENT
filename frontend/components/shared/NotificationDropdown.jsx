@@ -14,8 +14,24 @@ function formatDate(value) {
 }
 
 function formatAlertText(item) {
+  if ((item?.action || '').toLowerCase().includes('new job order')) {
+    return item.action
+  }
+
   if ((item?.action || '').toLowerCase() === 'marked as completed') {
     return `JO ${item?.job_order?.jo_number || item?.job_order_id || '—'} has been completed and is awaiting your approval`
+  }
+
+  if ((item?.action || '').toLowerCase().startsWith('job order created with status')) {
+    return `New Job Order ${item?.job_order?.jo_number || item?.job_order_id || '—'} has been assigned to you.`
+  }
+
+  if ((item?.action || '').toLowerCase().startsWith('status changed:')) {
+    return item.action.replace(/status changed:\s*(\w+)\s*->\s*(\w+)/i, (_match, fromStatus, toStatus) => {
+      const fromLabel = String(fromStatus).charAt(0).toUpperCase() + String(fromStatus).slice(1)
+      const toLabel = String(toStatus).charAt(0).toUpperCase() + String(toStatus).slice(1)
+      return `Status changed: ${fromLabel} -> ${toLabel}`
+    })
   }
 
   return item?.action || 'Activity update'

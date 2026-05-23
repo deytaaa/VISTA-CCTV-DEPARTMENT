@@ -273,7 +273,7 @@ export default function ApprovalQueuePage() {
                               <td className="px-4 py-4 font-medium text-black">{row.jo_number || 'TBD'}</td>
                               <td className="px-4 py-4 text-gray-700">{row.location || '—'}</td>
                               <td className="px-4 py-4 text-gray-700">{row.date || '—'}</td>
-                              <td className="px-4 py-4 text-gray-700">{row.requestor_name || '—'}</td>
+                              <td className="px-4 py-4 text-gray-700">{row.sender?.name || row.sender?.email || row.requestor_name || '—'}</td>
                               <td className="px-4 py-4">
                                 <div className="flex flex-wrap gap-2">
                                   <ActionButton href={proofUrl} target="_blank" rel="noreferrer" tone="default">

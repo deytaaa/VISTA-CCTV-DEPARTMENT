@@ -139,6 +139,8 @@ export default function JobOrderViewPage() {
   const canMarkProcessing = isTechnician && status === 'sent'
   const canMarkCompleted = isTechnician && status === 'processing'
   const isProcessingOrBeyond = ['processing', 'completed', 'for_approval', 'approved', 'rejected'].includes(status)
+  const rejectionRemarks = jobOrder?.rejection_remarks?.trim()
+  const approvalTimestamp = jobOrder?.updated_at ? formatDateTime(jobOrder.updated_at) : '—'
 
   useEffect(() => {
     let mounted = true
@@ -344,11 +346,18 @@ export default function JobOrderViewPage() {
                   <span><strong className="text-black">Location:</strong> {jobOrder?.location || '—'}</span>
                   <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ring-1 ${statusBadgeClass(status)}`}>{statusLabel(status)}</span>
                 </div>
+                {status === 'rejected' ? (
+                  <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                    <p className="font-semibold">Rejection Reason</p>
+                    <p className="mt-1 text-red-600">{rejectionRemarks || 'No rejection remarks provided.'}</p>
+                  </div>
+                ) : null}
               </div>
 
-              {isTechnician ? (
-                <div className="flex flex-wrap gap-2">
-                  <ActionButton href={`/jo/${jobOrder?.id}/pdf`}>Download PDF</ActionButton>
+              <div className="flex flex-wrap gap-2">
+                <ActionButton href={`/jo/${jobOrder?.id}/pdf`}>Download PDF</ActionButton>
+                {isTechnician ? (
+                  <>
                   {canMarkProcessing ? (
                     <ActionButton tone="primary" onClick={markProcessing} disabled={actionLoading}>
                       Mark as Processing
@@ -364,10 +373,21 @@ export default function JobOrderViewPage() {
                       Mark as Completed
                     </ActionButton>
                   ) : null}
-                </div>
+                </>
               ) : null}
+              </div>
             </div>
           </section>
+
+          {status === 'approved' ? (
+            <section className="rounded-[24px] border border-gray-200 bg-white p-6 shadow-sm">
+              <h2 className="text-lg font-bold text-black">Approval Status</h2>
+              <div className="mt-4 rounded-2xl border border-green-200 bg-green-50 px-4 py-4 text-sm text-green-800">
+                <p className="font-semibold">Approved</p>
+                <p className="mt-1">Timestamp: {approvalTimestamp}</p>
+              </div>
+            </section>
+          ) : null}
 
           <section className="rounded-[24px] border border-gray-200 bg-white p-6 shadow-sm">
             <h2 className="text-lg font-bold text-black">Supplies & Equipment</h2>

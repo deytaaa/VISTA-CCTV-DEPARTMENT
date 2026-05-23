@@ -29,8 +29,16 @@ module.exports = {
 
   create: async (req, res) => {
     try {
-      const payload = req.body;
-      const { data, error } = await supabase.from('completion_reports').insert(payload).select('*');
+      const payload = req.body || {};
+      const completedBy = req.user?.id || payload.completed_by || null;
+
+      const { data, error } = await supabase
+        .from('completion_reports')
+        .insert({
+          ...payload,
+          completed_by: completedBy,
+        })
+        .select('*');
       if (error) return res.status(500).json({ error: error.message || error });
 
       return res.status(201).json({ data });

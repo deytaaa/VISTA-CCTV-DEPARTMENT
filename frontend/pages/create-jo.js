@@ -15,11 +15,31 @@ export default function CreateJO() {
   const [techniciansLoading, setTechniciansLoading] = useState(true)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
+  const [toast, setToast] = useState({ visible: false, exiting: false, joNumber: '' })
 
   useEffect(() => {
     const now = new Date()
     setDate(now.toISOString().slice(0, 10))
+  }, [])
+
+  async function loadNextJoNumber() {
+    try {
+      const base = process.env.NEXT_PUBLIC_API_URL || ''
+      const res = await fetch(`${base}/api/jo/next-number`)
+      const payload = await res.json()
+
+      if (!res.ok) {
+        throw new Error(payload?.error || 'Failed to load next JO number')
+      }
+
+      setJoNumber(payload?.jo_number || '')
+    } catch (fetchError) {
+      setJoNumber('')
+    }
+  }
+
+  useEffect(() => {
+    loadNextJoNumber()
   }, [])
 
   useEffect(() => {
@@ -77,9 +97,36 @@ export default function CreateJO() {
     setPersonnel((current) => current.map((person, personIndex) => (personIndex === index ? { ...person, name: value } : person)))
   }
 
+  function resetForm() {
+    setJoNumber('')
+    setDate('')
+    setLocation('')
+    setItems([{ item_no: 1, item_name: '', reference_no: '', quantity: '' }])
+    setPersonnel([{ personnel_no: 1, name: '' }])
+    setSelectedTechnicianId('')
+  }
+
+  useEffect(() => {
+    if (!toast.visible) return
+
+    const exitTimer = setTimeout(() => {
+      setToast((current) => ({ ...current, exiting: true }))
+    }, 5000)
+
+    const resetTimer = setTimeout(() => {
+      setToast({ visible: false, exiting: false, joNumber: '' })
+      resetForm()
+      void loadNextJoNumber()
+    }, 5300)
+
+    return () => {
+      clearTimeout(exitTimer)
+      clearTimeout(resetTimer)
+    }
+  }, [toast.visible, toast.joNumber])
+
   async function submitJobOrder(status) {
     setError('')
-    setSuccess('')
     setLoading(true)
 
     if (!selectedTechnicianId) {
@@ -136,7 +183,10 @@ export default function CreateJO() {
 
       const savedJoNumber = data?.data?.jo_number || ''
       setJoNumber(savedJoNumber)
-      setSuccess(status === 'draft' ? 'Job order saved as draft.' : `Job Order ${savedJoNumber} has been generated successfully`)
+
+      if (status === 'sent') {
+        setToast({ visible: true, exiting: false, joNumber: savedJoNumber })
+      }
     } catch (submitError) {
       setError(submitError.message)
     } finally {
@@ -147,6 +197,20 @@ export default function CreateJO() {
   return (
     <ProtectedRoute allowedRoles={['admin', 'dispatcher']}>
       <Layout title="Create Job Order">
+        {toast.visible || toast.exiting ? (
+          <div className="fixed right-4 top-4 z-50 w-[320px] max-w-[calc(100vw-2rem)]">
+            <div
+              className={`rounded-2xl border-l-4 border-l-[#10B981] bg-white px-4 py-4 shadow-[0_12px_30px_rgba(0,0,0,0.12)] transition-all duration-300 ease-out ${
+                toast.exiting ? 'translate-x-full opacity-0' : 'translate-x-0 opacity-100'
+              }`}
+            >
+              <p className="text-sm font-bold text-black">✅ Job Order Generated</p>
+              <p className="mt-1 text-2xl font-black tracking-tight text-[#CC0000]">{toast.joNumber}</p>
+              <p className="mt-1 text-xs font-medium text-gray-500">Sent to technician.</p>
+            </div>
+          </div>
+        ) : null}
+
         <div className="mx-auto max-w-6xl space-y-6">
           <div className="rounded-[28px] border border-gray-200 bg-white p-6 shadow-sm">
             <div className="border-b border-gray-100 pb-5">
@@ -154,7 +218,6 @@ export default function CreateJO() {
             </div>
 
             {error ? <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
-            {success ? <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{success}</div> : null}
 
             <div className="mt-6 grid gap-5 lg:grid-cols-4">
               <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4">
@@ -174,7 +237,7 @@ export default function CreateJO() {
               </div>
 
               <div className="rounded-2xl border border-gray-200 bg-white px-4 py-4">
-                <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Assign To Technician</label>
+                <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Assign To</label>
                 <select
                   value={selectedTechnicianId}
                   onChange={(e) => setSelectedTechnicianId(e.target.value)}

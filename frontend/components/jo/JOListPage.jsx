@@ -19,6 +19,15 @@ const STATUS_OPTIONS = [
   { value: 'archived', label: 'Archived' },
 ]
 
+const TECHNICIAN_STATUS_OPTIONS = [
+  { value: 'all', label: 'All Statuses' },
+  { value: 'sent', label: 'Sent' },
+  { value: 'processing', label: 'Processing' },
+  { value: 'for_approval', label: 'For Approval' },
+  { value: 'approved', label: 'Approved' },
+  { value: 'rejected', label: 'Rejected' },
+]
+
 function statusLabel(status) {
   return (status || 'draft').replace(/_/g, ' ')
 }
@@ -117,6 +126,7 @@ export default function JOListPage({
 }) {
   const { session, user } = useAuth()
   const isTechnicianView = viewMode === 'technician'
+  const statusOptions = isTechnicianView ? TECHNICIAN_STATUS_OPTIONS : STATUS_OPTIONS
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -169,7 +179,7 @@ export default function JOListPage({
         params.set('limit', String(limit))
 
         const effectiveReceiverId = receiverId || (isTechnicianView ? user?.id : null)
-        const effectiveStatusIn = statusIn || (isTechnicianView ? 'sent,processing,completed,for_approval' : null)
+        const effectiveStatusIn = statusIn || (isTechnicianView ? 'sent,processing,for_approval,approved,rejected' : null)
 
         if (effectiveReceiverId) params.set('receiver_id', effectiveReceiverId)
         if (effectiveStatusIn) params.set('status_in', effectiveStatusIn)
@@ -257,6 +267,31 @@ export default function JOListPage({
     }
   }
 
+  async function requestApproval(jobOrderId) {
+    if (!session?.access_token) return
+
+    const response = await fetch(`${API_BASE_URL}/api/approval`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({
+        job_order_id: jobOrderId,
+        action: 'request_approval',
+        approved_by: user?.id || null,
+      }),
+    })
+
+    const payload = await response.json()
+
+    if (!response.ok) {
+      throw new Error(payload?.error || 'Failed to send job order for approval')
+    }
+
+    return payload
+  }
+
   function handleMarkProcessing(jobOrderId) {
     technicianRequest({ id: jobOrderId, url: `/api/job-orders/${jobOrderId}/processing` })
   }
@@ -304,6 +339,7 @@ export default function JOListPage({
     try {
       const formData = new FormData()
       formData.append('file', proofFile)
+      formData.append('jobOrderId', proofJobOrder.id)
 
       const uploadResponse = await fetch(`${API_BASE_URL}/api/jo/upload-proof`, {
         method: 'POST',
@@ -337,6 +373,8 @@ export default function JOListPage({
       if (!completionResponse.ok) {
         throw new Error(completionPayload?.error || 'Failed to save completion proof')
       }
+
+      await requestApproval(proofJobOrder.id)
 
       setRefreshTick((value) => value + 1)
       closeProofModal()
@@ -385,6 +423,17 @@ export default function JOListPage({
             Mark as Completed
           </TableButton>
           {hasProof ? <span className="inline-flex items-center rounded-full bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">Proof uploaded</span> : null}
+        </div>
+      )
+    }
+
+    if (status === 'rejected') {
+      return (
+        <div className="flex flex-wrap gap-2">
+          {pdfActions}
+          <TableButton tone="primary" disabled={proofLoading || actionLoadingId === row.id} onClick={() => openProofModal(row)}>
+            Re-upload Proof
+          </TableButton>
         </div>
       )
     }
@@ -497,7 +546,7 @@ export default function JOListPage({
                     onChange={(e) => setStatusFilter(e.target.value)}
                     className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-black"
                   >
-                    {STATUS_OPTIONS.map((option) => (
+                    {statusOptions.map((option) => (
                       <option key={option.value} value={option.value}>
                         {option.label}
                       </option>
@@ -553,7 +602,6 @@ export default function JOListPage({
                               <td className="px-4 py-4 text-gray-700">
                                 <div className="space-y-2">
                                   <StatusBadge status={row.status} />
-                                  {row.rejection_remarks ? <p className="max-w-xs text-xs text-red-600">Remarks: {row.rejection_remarks}</p> : null}
                                 </div>
                               </td>
                               <td className="px-4 py-4">
@@ -561,7 +609,7 @@ export default function JOListPage({
                                   technicianActions
                                 ) : (
                                   <div className="flex flex-wrap gap-2">
-                                    <TableButton href={`/jo/${row.id}/pdf`} target="_blank" rel="noreferrer" tone="default">
+                                    <TableButton href={`/jo/${row.id}`} target="_blank" rel="noreferrer" tone="default">
                                       View
                                     </TableButton>
                                     <TableButton href={`/jo/${row.id}/pdf`} target="_blank" rel="noreferrer" tone="default">
@@ -628,7 +676,7 @@ export default function JOListPage({
               <div className="w-full max-w-lg rounded-[24px] bg-white p-6 shadow-2xl">
                 <div className="mb-4 flex items-start justify-between gap-4">
                   <div>
-                    <h3 className="text-lg font-bold text-black">Upload Proof</h3>
+                    <h3 className="text-lg font-bold text-black">{(proofJobOrder.status || '').toLowerCase() === 'rejected' ? 'Re-upload Proof' : 'Upload Proof'}</h3>
                     <p className="text-sm text-gray-500">{proofJobOrder.jo_number || 'Job Order'} - {proofJobOrder.location || 'No location'}</p>
                   </div>
                   <button type="button" onClick={closeProofModal} className="rounded-full border border-gray-200 px-3 py-1 text-sm font-semibold text-black">
@@ -664,7 +712,7 @@ export default function JOListPage({
                     Cancel
                   </button>
                   <button type="button" onClick={submitProof} disabled={proofLoading} className="rounded-2xl bg-taguigRed px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">
-                    {proofLoading ? 'Uploading...' : 'Save Proof'}
+                    {proofLoading ? 'Uploading...' : (proofJobOrder && (proofJobOrder.status || '').toLowerCase() === 'rejected' ? 'Re-upload and Submit' : 'Save Proof')}
                   </button>
                 </div>
               </div>

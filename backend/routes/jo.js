@@ -71,6 +71,29 @@ router.post('/generate', async (req, res) => {
   }
 });
 
+router.get('/next-number', async (req, res) => {
+  try {
+    const year = new Date().getFullYear();
+    const { data, error } = await supabase
+      .from('jo_number_sequences')
+      .select('year, last_value')
+      .eq('year', year)
+      .maybeSingle();
+
+    if (error) {
+      return res.status(500).json({ error: error.message || 'Failed to load next JO number' });
+    }
+
+    const nextValue = Number(data?.last_value || 0) + 1;
+    const jo_number = `JO-${year}-${String(nextValue).padStart(4, '0')}`;
+
+    return res.json({ jo_number, year, last_value: Number(data?.last_value || 0) });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Failed to load next JO number' });
+  }
+});
+
 router.post('/upload-proof', authMiddleware, requireAnyRole(['admin', 'technician']), upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   // Validate MIME types
@@ -80,15 +103,22 @@ router.post('/upload-proof', authMiddleware, requireAnyRole(['admin', 'technicia
   }
 
   const bucket = 'signed-jo-proofs';
-  const filename = `${Date.now()}_${req.file.originalname.replace(/\s+/g, '_')}`;
+  const jobOrderId = req.body?.jobOrderId || 'unknown-job-order';
+  const fileExt = String(req.file.originalname || '').split('.').pop() || 'bin';
+  const fileName = `${jobOrderId}-${Date.now()}.${fileExt}`;
+  const filePath = `proofs/${fileName}`;
   try {
     const { data, error: uploadError } = await supabase.storage
       .from(bucket)
-      .upload(filename, req.file.buffer, { contentType: req.file.mimetype, upsert: false });
+      .upload(filePath, req.file.buffer, {
+        cacheControl: '3600',
+        contentType: req.file.mimetype,
+        upsert: false,
+      });
 
     if (uploadError) {
-      console.error('Supabase upload error', uploadError);
-      return res.status(500).json({ error: 'Failed to upload to storage' });
+      console.error('Storage error:', uploadError);
+      return res.status(500).json({ error: `Upload failed: ${uploadError.message}` });
     }
 
     const { data: publicData } = supabase.storage.from(bucket).getPublicUrl(data.path);
