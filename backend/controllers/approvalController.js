@@ -1,5 +1,29 @@
 const supabase = require('../lib/supabase');
 
+async function notifyUsers(userIds, notification) {
+  const uniqueIds = [...new Set((userIds || []).filter(Boolean))];
+  if (uniqueIds.length === 0) return;
+
+  await Promise.all(
+    uniqueIds.map((userId) =>
+      supabase.from('notifications').insert({
+        user_id: userId,
+        job_order_id: notification.jobOrderId,
+        title: notification.title,
+        message: notification.message,
+        is_read: false,
+        created_at: new Date().toISOString(),
+      })
+    )
+  );
+}
+
+async function getAdminUserIds() {
+  const { data, error } = await supabase.from('users').select('id').eq('role', 'admin');
+  if (error || !Array.isArray(data)) return [];
+  return data.map((admin) => admin.id).filter(Boolean);
+}
+
 module.exports = {
   list: async (req, res) => {
     try {
@@ -46,7 +70,9 @@ module.exports = {
 
       if (jobOrderError) return res.status(404).json({ error: jobOrderError.message || jobOrderError });
 
-      if (normalizedAction === 'approve' && jobOrder.status === 'archived') {
+      const previousStatus = jobOrder.status;
+
+      if (normalizedAction === 'approve' && previousStatus === 'archived') {
         return res.status(400).json({ error: 'Archived job orders cannot be approved again' });
       }
 
@@ -74,22 +100,24 @@ module.exports = {
 
       const activityAction =
         normalizedAction === 'request_approval'
-          ? `Job Order ${jobOrder?.jo_number || job_order_id} proof re-submitted`
+          ? previousStatus === 'rejected'
+            ? `Job Order ${jobOrder?.jo_number || job_order_id} proof re-submitted`
+            : `Job Order ${jobOrder?.jo_number || job_order_id} submitted for approval`
           : normalizedAction === 'approve'
             ? `Job Order ${jobOrder?.jo_number || job_order_id} has been approved`
             : `Job Order ${jobOrder?.jo_number || job_order_id} has been rejected`;
 
       await supabase.from('activity_logs').insert({ user_id: approved_by || null, action: activityAction, job_order_id });
 
-      if (normalizedAction === 'request_approval' && jobOrder?.sender_id) {
-        const message = jobOrder.status === 'rejected'
-          ? `Proof re-uploaded for ${jobOrder?.jo_number || job_order_id}`
-          : `Job Order ${jobOrder?.jo_number || job_order_id} submitted for approval`;
+      if (normalizedAction === 'request_approval') {
+        const adminIds = await getAdminUserIds();
+        const message = previousStatus === 'rejected'
+          ? `Job Order ${jobOrder?.jo_number || job_order_id} proof has been re-uploaded and is ready for review.`
+          : `Job Order ${jobOrder?.jo_number || job_order_id} has been submitted for your approval.`;
 
-        await supabase.from('notifications').insert({
-          user_id: jobOrder.sender_id,
-          job_order_id,
-          title: 'Approval Request',
+        await notifyUsers(adminIds, {
+          jobOrderId: job_order_id,
+          title: 'Job Order Submitted',
           message,
         });
       }
@@ -102,9 +130,8 @@ module.exports = {
             : `Job Order ${jobOrder?.jo_number || job_order_id} was rejected. Reason: ${remarks || 'No reason provided'}`;
 
         if (jobOrder?.receiver_id) {
-          await supabase.from('notifications').insert({
-            user_id: jobOrder.receiver_id,
-            job_order_id,
+          await notifyUsers([jobOrder.receiver_id], {
+            jobOrderId: job_order_id,
             title: notificationTitle,
             message: notificationMessage,
           });

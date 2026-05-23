@@ -20,11 +20,13 @@ async function notifyUser({ userId, jobOrderId, title, message }) {
     job_order_id: jobOrderId,
     title,
     message,
+    is_read: false,
+    created_at: new Date().toISOString(),
   });
 }
 
 async function notifyTechnicianForSentJobOrder({ jobOrderId, joNumber, receiverId }) {
-  const message = joNumber ? `New Job Order ${joNumber} has been assigned to you` : 'New Job Order has been assigned to you';
+  const message = joNumber ? `New Job Order ${joNumber} has been assigned to you.` : 'New Job Order has been assigned to you.';
   await notifyUser({
     userId: receiverId,
     jobOrderId,
@@ -33,14 +35,22 @@ async function notifyTechnicianForSentJobOrder({ jobOrderId, joNumber, receiverI
   });
 }
 
-async function notifyAdminForSentJobOrder({ jobOrderId, joNumber, adminUserId }) {
-  const message = joNumber ? `Job Order ${joNumber} has been dispatched` : 'Job Order has been dispatched';
-  await notifyUser({
-    userId: adminUserId,
-    jobOrderId,
-    title: 'Job Order Dispatched',
-    message,
-  });
+async function notifyAdmins({ jobOrderId, title, message }) {
+  const { data: admins, error } = await supabase.from('users').select('id').eq('role', 'admin');
+  if (error || !Array.isArray(admins) || admins.length === 0) return;
+
+  await Promise.all(
+    admins.map((admin) =>
+      supabase.from('notifications').insert({
+        user_id: admin.id,
+        job_order_id: jobOrderId,
+        title,
+        message,
+        is_read: false,
+        created_at: new Date().toISOString(),
+      })
+    )
+  );
 }
 
 module.exports = {
@@ -173,12 +183,6 @@ module.exports = {
           joNumber: created.jo_number,
           receiverId: created.receiver_id,
         });
-
-        await notifyAdminForSentJobOrder({
-          jobOrderId,
-          joNumber: created.jo_number,
-          adminUserId: req.user?.id || payload.sender_id || null,
-        });
       }
 
       return res.status(201).json({ data: created });
@@ -218,12 +222,6 @@ module.exports = {
           jobOrderId: id,
           joNumber: data?.jo_number || payload.jo_number || current.jo_number || null,
           receiverId: data?.receiver_id || payload.receiver_id || current.receiver_id || null,
-        });
-
-        await notifyAdminForSentJobOrder({
-          jobOrderId: id,
-          joNumber: data?.jo_number || payload.jo_number || current.jo_number || null,
-          adminUserId: req.user?.id || data?.sender_id || payload.sender_id || null,
         });
       }
 
@@ -385,14 +383,11 @@ module.exports = {
         job_order_id: id,
       });
 
-      if (current?.sender_id) {
-        await supabase.from('notifications').insert({
-          user_id: current.sender_id,
-          job_order_id: id,
-          title: 'Job Order Submitted for Approval',
-          message: `Job Order ${current?.jo_number || id} submitted for approval`,
-        });
-      }
+      await notifyAdmins({
+        jobOrderId: id,
+        title: 'Job Order Submitted',
+        message: `Job Order ${current?.jo_number || id} has been submitted for your approval.`,
+      });
 
       return res.json({ data });
     } catch (err) {

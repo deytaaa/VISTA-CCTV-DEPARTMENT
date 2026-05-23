@@ -10,7 +10,7 @@ import JOStatusBadge from '../jo/JOStatusBadge'
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || ''
 
 const summaryCards = [
-  { key: 'total', label: 'My Total JOs' },
+  { key: 'approved', label: 'Approved', tone: 'approved' },
   { key: 'sent', label: 'Sent', tone: 'warning' },
   { key: 'processing', label: 'Processing', tone: 'info' },
   { key: 'for_approval', label: 'For Approval', tone: 'warning' },
@@ -20,7 +20,7 @@ const summaryCards = [
 export default function TechnicianDashboard() {
   const { user, session } = useAuth()
   const [rows, setRows] = useState([])
-  const [counts, setCounts] = useState({ total: 0, sent: 0, processing: 0, for_approval: 0, rejected: 0 })
+  const [counts, setCounts] = useState({ approved: 0, sent: 0, processing: 0, for_approval: 0, rejected: 0 })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
@@ -56,7 +56,7 @@ export default function TechnicianDashboard() {
         params.set('page', '1')
         params.set('limit', '100')
         params.set('receiver_id', user.id)
-        params.set('status_in', 'sent,processing,for_approval,rejected')
+        params.set('status_in', 'approved,sent,processing,for_approval,rejected')
 
         const response = await fetch(`${API_BASE_URL}/api/job-orders?${params.toString()}`, {
           headers: { Authorization: `Bearer ${session.access_token}` },
@@ -75,14 +75,13 @@ export default function TechnicianDashboard() {
         setCounts(
           list.reduce(
             (acc, row) => {
-              acc.total += 1
               const status = (row.status || '').toLowerCase()
               if (Object.prototype.hasOwnProperty.call(acc, status)) {
                 acc[status] += 1
               }
               return acc
             },
-            { total: 0, sent: 0, processing: 0, for_approval: 0, rejected: 0 }
+            { approved: 0, sent: 0, processing: 0, for_approval: 0, rejected: 0 }
           )
         )
       } catch (dashboardError) {

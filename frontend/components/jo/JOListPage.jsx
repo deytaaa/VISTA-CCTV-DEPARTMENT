@@ -116,10 +116,28 @@ export default function JOListPage({
   const [proofRemarks, setProofRemarks] = useState('')
   const [proofLoading, setProofLoading] = useState(false)
   const [proofError, setProofError] = useState('')
+  const [proofToast, setProofToast] = useState({ visible: false, exiting: false })
 
   const totalPages = useMemo(() => Math.max(1, Math.ceil((total || 0) / limit)), [limit, total])
   const startRow = total === 0 ? 0 : (page - 1) * limit + 1
   const endRow = Math.min(page * limit, total)
+
+  useEffect(() => {
+    if (!proofToast.visible) return
+
+    const exitTimer = setTimeout(() => {
+      setProofToast((current) => ({ ...current, exiting: true }))
+    }, 4000)
+
+    const resetTimer = setTimeout(() => {
+      setProofToast({ visible: false, exiting: false })
+    }, 4300)
+
+    return () => {
+      clearTimeout(exitTimer)
+      clearTimeout(resetTimer)
+    }
+  }, [proofToast.visible])
 
   useEffect(() => {
     const handle = setTimeout(() => setDebouncedSearch(searchInput.trim()), 300)
@@ -342,6 +360,7 @@ export default function JOListPage({
       await requestApproval(proofJobOrder.id)
 
       setRefreshTick((value) => value + 1)
+      setProofToast({ visible: true, exiting: false })
       closeProofModal()
     } catch (proofUploadError) {
       setProofError(proofUploadError.message)
@@ -517,6 +536,20 @@ export default function JOListPage({
     <ProtectedRoute allowedRoles={allowedRoles}>
       <Layout title={title} subtitle="Job Orders">
         <div className="mx-auto max-w-6xl space-y-5">
+          {proofToast.visible || proofToast.exiting ? (
+            <div className="fixed right-4 top-4 z-50 w-[320px] max-w-[calc(100vw-2rem)]">
+              <div
+                className={`rounded-2xl border-l-4 border-l-[#10B981] bg-white px-4 py-4 shadow-[0_12px_30px_rgba(0,0,0,0.12)] transition-all duration-300 ease-out ${
+                  proofToast.exiting ? 'translate-x-full opacity-0' : 'translate-x-0 opacity-100'
+                }`}
+              >
+                <p className="text-sm font-bold text-black">Proof Uploaded</p>
+                <p className="mt-1 text-xs font-medium text-gray-500">Successfully saved.</p>
+                <p className="mt-1 text-xs font-medium text-gray-500">You can now mark this JO as completed.</p>
+              </div>
+            </div>
+          ) : null}
+
           {description ? <p className="text-sm text-gray-600">{description}</p> : null}
 
           <div className="rounded-[24px] border border-gray-200 bg-white p-5 shadow-sm">
