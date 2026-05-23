@@ -1,85 +1,109 @@
 import { useEffect, useState } from 'react'
-import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer'
 import { PDFDownloadLink } from '@react-pdf/renderer'
+import { useRouter } from 'next/router'
 import ProtectedRoute from '../../../components/ProtectedRoute'
+import { useAuth } from '../../../context/AuthContext'
+import JODocument from '../../../components/jo/JODocument'
 
-const styles = StyleSheet.create({
-  page: { padding: 20 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
-  tableRow: { flexDirection: 'row', borderBottomWidth: 1, paddingVertical: 6 }
-})
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || ''
 
-function JOReport({ jo }){
-  return (
-    <Document>
-      <Page size="A4" style={styles.page}>
-        <View style={styles.header}>
-          <View>
-            <Text>City Government of Taguig</Text>
-            <Text>CCTV Department</Text>
-          </View>
-          <View>
-            <Text>JO No: {jo.jo_number}</Text>
-            <Text>Date: {jo.date}</Text>
-            <Text>Location: {jo.location}</Text>
-          </View>
-        </View>
+function normalizeJobOrder(payload) {
+  if (!payload || typeof payload !== 'object') return null
 
-        <View>
-          <Text>Table 1 — Supplies & Equipment</Text>
-          {jo.items.map((it, i)=> (
-            <View key={i} style={styles.tableRow}>
-              <Text>{i+1}. {it.item_name} — Ref: {it.reference_no} — Qty: {it.quantity}</Text>
-            </View>
-          ))}
-        </View>
+  const items = Array.isArray(payload.items) ? payload.items : Array.isArray(payload.job_order_items) ? payload.job_order_items : []
+  const personnel = Array.isArray(payload.personnel)
+    ? payload.personnel
+    : Array.isArray(payload.job_order_personnel)
+      ? payload.job_order_personnel
+      : []
 
-        <View style={{ marginTop: 20 }}>
-          <Text>Table 2 — Personnel</Text>
-          {jo.personnel.map((p,i)=>(
-            <View key={i} style={styles.tableRow}>
-              <Text>{i+1}. {p.name}</Text>
-            </View>
-          ))}
-        </View>
-
-        <View style={{ marginTop: 40 }}>
-          <Text>Signatory: ___________________________</Text>
-        </View>
-      </Page>
-    </Document>
-  )
+  return {
+    ...payload,
+    items,
+    personnel,
+  }
 }
 
-export default function JoPdfPage({ query }){
+export default function JoPdfPage() {
+  const router = useRouter()
+  const { session } = useAuth()
   const [isClient, setIsClient] = useState(false)
+  const [jobOrder, setJobOrder] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     setIsClient(true)
   }, [])
 
-  // Placeholder JO — in production fetch JO by id
-  const jo = {
-    jo_number: 'JO-2026-0001',
-    date: new Date().toLocaleDateString(),
-    location: 'Sample Location',
-    items: [ { item_name: 'CCTV Camera', reference_no: 'REF-001', quantity: 2 } ],
-    personnel: [ { name: 'Technician A' } ]
-  }
+  useEffect(() => {
+    let mounted = true
+
+    async function loadJobOrder() {
+      if (!router.isReady || !router.query.id) return
+
+      if (!session?.access_token) {
+        setError('You must be signed in to view the PDF.')
+        setLoading(false)
+        return
+      }
+
+      setLoading(true)
+      setError('')
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/job-orders/${router.query.id}`, {
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        })
+        const payload = await response.json()
+
+        if (!response.ok) {
+          throw new Error(payload?.error || 'Failed to load job order')
+        }
+
+        if (mounted) {
+          setJobOrder(normalizeJobOrder(payload?.data))
+        }
+      } catch (fetchError) {
+        if (mounted) {
+          setError(fetchError.message)
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false)
+        }
+      }
+    }
+
+    loadJobOrder()
+
+    return () => {
+      mounted = false
+    }
+  }, [router.isReady, router.query.id, session?.access_token])
+
+  const fileName = jobOrder?.jo_number ? `${jobOrder.jo_number}.pdf` : 'job-order.pdf'
+
   return (
     <ProtectedRoute>
-    <div className="p-6">
-      <h1 className="text-xl font-bold mb-4">JO PDF Preview</h1>
-      {isClient ? (
-        <PDFDownloadLink document={<JOReport jo={jo} />} fileName={`${jo.jo_number}.pdf`}>
-          {({ loading }) => (loading ? 'Preparing document...' : <button className="px-3 py-2 bg-taguigRed text-white rounded">Download PDF</button>)}
-        </PDFDownloadLink>
-      ) : (
-        <button className="px-3 py-2 bg-gray-400 text-white rounded" disabled>
-          Download PDF
-        </button>
-      )}
-    </div>
+      <div className="p-6">
+        <h1 className="mb-4 text-xl font-bold text-black">JO PDF Preview</h1>
+        {loading ? <p className="text-sm text-gray-500">Loading job order...</p> : null}
+        {error ? <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p> : null}
+        {isClient && jobOrder ? (
+          <PDFDownloadLink document={<JODocument jobOrder={jobOrder} />} fileName={fileName}>
+            {({ loading: pdfLoading }) =>
+              pdfLoading ? (
+                <span className="inline-flex rounded-xl bg-gray-200 px-4 py-2 text-sm font-semibold text-gray-600">Preparing document...</span>
+              ) : (
+                <button className="rounded-xl bg-taguigRed px-4 py-2 font-semibold text-white">Download PDF</button>
+              )
+            }
+          </PDFDownloadLink>
+        ) : null}
+      </div>
     </ProtectedRoute>
   )
 }

@@ -151,7 +151,13 @@ export default function JOListPage({ title, description, status = null, allowedR
 
         const payload = await response.json()
 
+        // Debug: log response status and payload to browser console
+        // eslint-disable-next-line no-console
+        console.debug('JOListPage: /api/job-orders', response.status, payload)
+
         if (!response.ok) {
+          // eslint-disable-next-line no-console
+          console.error('JOListPage fetch failed', response.status, payload)
           throw new Error(payload?.error || 'Failed to load job orders')
         }
 

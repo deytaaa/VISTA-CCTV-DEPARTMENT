@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import ProtectedRoute from '../components/ProtectedRoute'
 import Layout from '../components/layout/Layout'
+import { useAuth } from '../context/AuthContext'
 
 export default function CreateJO() {
+  const { session } = useAuth()
   const [joNumber, setJoNumber] = useState('');
   const [date, setDate] = useState('');
   const [location, setLocation] = useState('');
@@ -62,9 +64,15 @@ export default function CreateJO() {
 
     try {
       const base = process.env.NEXT_PUBLIC_API_URL || ''
+      const headers = { 'Content-Type': 'application/json' }
+
+      if (session?.access_token) {
+        headers.Authorization = `Bearer ${session.access_token}`
+      }
+
       const res = await fetch(`${base}/api/job-orders`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           jo_number: joNumber,
           date,

@@ -59,6 +59,13 @@ export default function AdminDashboard() {
         const jobOrdersPayload = await jobOrdersResponse.json()
         const logsPayload = await logsResponse.json()
 
+        // Debug: surface response status and payload for troubleshooting
+        // Visible in browser devtools console when dashboard loads
+        // eslint-disable-next-line no-console
+        console.debug('AdminDashboard: /api/job-orders', jobOrdersResponse.status, jobOrdersPayload)
+        // eslint-disable-next-line no-console
+        console.debug('AdminDashboard: /api/logs', logsResponse.status, logsPayload)
+
         if (!jobOrdersResponse.ok) {
           throw new Error(jobOrdersPayload?.error || 'Failed to load dashboard data')
         }
@@ -89,6 +96,8 @@ export default function AdminDashboard() {
         )
       } catch (dashboardError) {
         if (!mounted) return
+        // eslint-disable-next-line no-console
+        console.error('Dashboard load error', dashboardError)
         setError(dashboardError.message)
       } finally {
         if (mounted) setLoading(false)
