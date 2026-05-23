@@ -10,13 +10,8 @@ const STATUS_OPTIONS = [
   { value: 'all', label: 'All Statuses' },
   { value: 'draft', label: 'Draft' },
   { value: 'sent', label: 'Sent' },
-  { value: 'pending', label: 'Pending' },
   { value: 'processing', label: 'Processing' },
-  { value: 'completed', label: 'Completed' },
-  { value: 'for_approval', label: 'For Approval' },
-  { value: 'approved', label: 'Approved' },
   { value: 'rejected', label: 'Rejected' },
-  { value: 'archived', label: 'Archived' },
 ]
 
 const TECHNICIAN_STATUS_OPTIONS = [
@@ -179,7 +174,7 @@ export default function JOListPage({
         params.set('limit', String(limit))
 
         const effectiveReceiverId = receiverId || (isTechnicianView ? user?.id : null)
-        const effectiveStatusIn = statusIn || (isTechnicianView ? 'sent,processing,for_approval,approved,rejected' : null)
+        const effectiveStatusIn = statusIn || (isTechnicianView ? 'sent,processing,for_approval,approved,rejected' : 'draft,sent,processing,rejected')
 
         if (effectiveReceiverId) params.set('receiver_id', effectiveReceiverId)
         if (effectiveStatusIn) params.set('status_in', effectiveStatusIn)

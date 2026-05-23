@@ -95,7 +95,7 @@ export default function ArchiveListPage({ title, description, allowedRoles = ['a
         const params = new URLSearchParams()
         params.set('page', String(page))
         params.set('limit', String(limit))
-        params.set('status', 'archived')
+        params.set('status_in', 'approved,archived')
         if (debouncedSearch) params.set('q', debouncedSearch)
         if (dateFrom) params.set('date_from', dateFrom)
         if (dateTo) params.set('date_to', dateTo)

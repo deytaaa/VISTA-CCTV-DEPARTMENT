@@ -29,13 +29,13 @@ module.exports = {
 
   create: async (req, res) => {
     try {
-      // create an approval action: set job_orders.status to 'for_approval' or 'approved' depending on body
+      // create an approval action: set job_orders.status to final workflow state
       const { job_order_id, action, remarks, approved_by } = req.body;
       if (!job_order_id || !action) return res.status(400).json({ error: 'job_order_id and action required' });
 
       let newStatus = null;
       if (action === 'request_approval') newStatus = 'for_approval';
-      if (action === 'approve') newStatus = 'approved';
+      if (action === 'approve') newStatus = 'archived';
       if (action === 'reject') newStatus = 'rejected';
 
       if (newStatus) {
@@ -45,7 +45,7 @@ module.exports = {
           action === 'request_approval'
             ? 'Proof re-uploaded and submitted for approval'
             : action === 'approve'
-              ? 'Job order approved'
+              ? 'Job order approved and archived'
               : 'Job order rejected'
 
         // log activity

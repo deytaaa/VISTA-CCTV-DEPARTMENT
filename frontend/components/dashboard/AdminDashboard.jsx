@@ -8,12 +8,46 @@ import Layout from '../layout/Layout'
 
 const summaryCards = [
   { key: 'total', label: 'Total JOs' },
-  { key: 'pending', label: 'Pending', tone: 'warning' },
   { key: 'processing', label: 'Processing', tone: 'info' },
   { key: 'for_approval', label: 'For Approval', tone: 'warning' },
   { key: 'rejected', label: 'Rejected', tone: 'danger' },
-  { key: 'archived', label: 'Archived', tone: 'neutral' },
 ]
+
+function formatActivityTimestamp(value) {
+  if (!value) return '—'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return new Intl.DateTimeFormat('en-US', {
+    month: '2-digit',
+    day: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  })
+    .format(date)
+    .replace(',', '')
+}
+
+function formatActivityAction(action) {
+  const normalized = String(action || '').trim().toLowerCase()
+  const mapping = {
+    job_order_created: 'Job Order created',
+    status_changed_to_processing: 'Marked as Processing',
+    proof_uploaded: 'Proof uploaded by technician',
+    submitted_for_approval: 'Submitted for approval',
+    job_order_approved: 'Approved by admin',
+    job_order_rejected: 'Rejected by admin',
+    proof_reuploaded: 'Proof re-submitted',
+    'marked as processing': 'Marked as Processing',
+    'marked as completed': 'Submitted for approval',
+    'proof re-uploaded and submitted for approval': 'Proof re-submitted',
+    'job order approved and archived': 'Approved by admin',
+    'job order rejected': 'Rejected by admin',
+  }
+
+  return mapping[normalized] || action || 'Activity update'
+}
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || ''
 
@@ -86,11 +120,9 @@ export default function AdminDashboard() {
             },
             {
               total: 0,
-              pending: 0,
               processing: 0,
               for_approval: 0,
               rejected: 0,
-              archived: 0,
             }
           )
         )
@@ -133,7 +165,7 @@ export default function AdminDashboard() {
         <div className="mx-auto max-w-6xl">
           {error ? <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
 
-          <section className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
+          <section className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {summaryCards.map((card) => (
               <StatCard key={card.key} label={card.label} value={loading ? '…' : statusCounts[card.key] ?? 0} tone={card.tone} />
             ))}
@@ -174,9 +206,9 @@ export default function AdminDashboard() {
                   ) : (
                     rows.map((row) => (
                       <tr key={row.id} className="border-t border-gray-100">
-                        <td className="px-4 py-3 font-medium text-black">{row.action}</td>
-                        <td className="px-4 py-3 text-gray-700">{row.job_order_id || '—'}</td>
-                        <td className="px-4 py-3 text-gray-700">{row.timestamp || '—'}</td>
+                        <td className="px-4 py-3 font-medium text-black">{formatActivityAction(row.action)}</td>
+                        <td className="px-4 py-3 text-gray-700">{row.job_order?.jo_number || '—'}</td>
+                        <td className="px-4 py-3 text-gray-700">{formatActivityTimestamp(row.timestamp)}</td>
                       </tr>
                     ))
                   )}
