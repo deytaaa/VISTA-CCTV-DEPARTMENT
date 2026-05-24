@@ -453,7 +453,7 @@ export default function CreateJO() {
                   <option value="">{techniciansLoading ? 'Loading technicians...' : 'Select a technician'}</option>
                   {technicians.map((technician) => (
                     <option key={technician.id} value={technician.id}>
-                      {technician.name || technician.email} ({technician.email})
+                      {technician.name}
                     </option>
                   ))}
                 </select>
