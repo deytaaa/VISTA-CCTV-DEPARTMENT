@@ -12,10 +12,14 @@ export default function Login() {
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
 
+  function getNextPath() {
+    const next = typeof router.query.next === 'string' ? router.query.next : '/dashboard'
+    return next && next !== '/' ? next : '/dashboard'
+  }
+
   useEffect(() => {
     if (!authLoading && isAuthenticated) {
-      const next = typeof router.query.next === 'string' ? router.query.next : '/dashboard'
-      router.replace(next)
+      router.replace(getNextPath())
     }
   }, [authLoading, isAuthenticated, router])
 
@@ -32,8 +36,7 @@ export default function Login() {
       return
     }
 
-    const next = typeof router.query.next === 'string' ? router.query.next : '/dashboard'
-    router.replace(next)
+    router.replace(getNextPath())
   }
 
   if (authLoading || isAuthenticated) {
@@ -56,7 +59,7 @@ export default function Login() {
       </div>
 
       <div className="relative z-10 min-h-screen flex items-center justify-center px-4 py-8">
-        <div className="w-full max-w-md rounded-[28px] border border-gray-200 bg-white px-6 py-8 shadow-[0_10px_40px_rgba(0,0,0,0.08)] sm:px-8 sm:py-10">
+        <div className="w-full max-w-md rounded-[28px] border border-gray-200 bg-white px-6 py-8 shadow-[0_20px_50px_rgba(0,0,0,0.16)] sm:px-8 sm:py-10">
         <div className="flex flex-col items-center text-center">
           <div className="h-20 w-20 rounded-full bg-white border border-gray-200 flex items-center justify-center overflow-hidden shadow-sm">
             <img
@@ -82,7 +85,7 @@ export default function Login() {
             <label className="mb-2 block text-sm font-medium text-black">
               Email Address
             </label>
-            <div className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3 shadow-sm transition focus-within:border-black focus-within:ring-4 focus-within:ring-gray-100">
+            <div className="flex items-center gap-3 rounded-2xl border-[1.5px] border-[#cbd5e1] bg-[#f8fafc] px-4 py-3 shadow-sm transition focus-within:border-black focus-within:ring-4 focus-within:ring-gray-100">
               <span className="text-gray-400 text-lg">@</span>
               <input
                 value={email}
@@ -100,7 +103,7 @@ export default function Login() {
             <label className="mb-2 block text-sm font-medium text-black">
               Password
             </label>
-            <div className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3 shadow-sm transition focus-within:border-black focus-within:ring-4 focus-within:ring-gray-100">
+            <div className="flex items-center gap-3 rounded-2xl border-[1.5px] border-[#cbd5e1] bg-[#f8fafc] px-4 py-3 shadow-sm transition focus-within:border-black focus-within:ring-4 focus-within:ring-gray-100">
               <span className="text-gray-400 text-lg">*</span>
               <input
                 value={password}
@@ -130,7 +133,7 @@ export default function Login() {
           <button
             type="submit"
             disabled={loading}
-            className="flex w-full items-center justify-center rounded-2xl bg-black px-4 py-3.5 text-sm font-semibold text-white shadow-lg shadow-black/10 transition hover:bg-gray-800 focus:outline-none focus:ring-4 focus:ring-gray-200 disabled:cursor-not-allowed disabled:opacity-70"
+            className="flex w-full items-center justify-center rounded-2xl bg-[#c0392b] px-4 py-3.5 text-sm font-semibold text-white shadow-lg shadow-[#c0392b]/20 transition hover:bg-[#a93226] focus:outline-none focus:ring-4 focus:ring-red-200 disabled:cursor-not-allowed disabled:opacity-70"
           >
             {loading ? 'Signing in...' : 'Sign In'}
           </button>

@@ -130,7 +130,14 @@ export default function TechnicianDashboard() {
             </div>
 
             <div className="overflow-x-auto">
-              <table className="min-w-[760px] text-left text-sm">
+              <table className="w-full min-w-[760px] table-fixed text-left text-sm">
+                <colgroup>
+                  <col className="w-[18%]" />
+                  <col className="w-[15%]" />
+                  <col className="w-[16%]" />
+                  <col className="w-[16%]" />
+                  <col className="w-[16%]" />
+                </colgroup>
                 <thead className="bg-[#FFF0F0] text-gray-700">
                   <tr>
                     <th className="px-4 py-3">JO No.</th>

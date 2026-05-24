@@ -387,7 +387,7 @@ export default function JOListPage({
 
     if (status === 'sent') {
       return (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex min-w-max flex-nowrap items-center gap-2">
           {pdfActions}
           <TableButton tone="primary" disabled={actionLoadingId === row.id} onClick={() => handleMarkProcessing(row.id)}>
             Mark as Processing
@@ -398,7 +398,7 @@ export default function JOListPage({
 
     if (status === 'processing') {
       return (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex min-w-max flex-nowrap items-center gap-2">
           {pdfActions}
           <TableButton tone="default" disabled={actionLoadingId === row.id} onClick={() => openProofModal(row)}>
             Upload Proof
@@ -413,7 +413,7 @@ export default function JOListPage({
 
     if (status === 'rejected') {
       return (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex min-w-max flex-nowrap items-center gap-2">
           {pdfActions}
           <TableButton tone="primary" disabled={proofLoading || actionLoadingId === row.id} onClick={() => openProofModal(row)}>
             Re-upload Proof
@@ -423,7 +423,7 @@ export default function JOListPage({
     }
 
     return (
-      <div className="flex flex-wrap gap-2">
+      <div className="flex min-w-max flex-nowrap items-center gap-2">
         {pdfActions}
       </div>
     )
@@ -630,7 +630,14 @@ export default function JOListPage({
               ) : (
                 <>
                   <div className="overflow-x-auto">
-                    <table className="min-w-[780px] text-left text-sm">
+                    <table className="w-full min-w-[780px] table-fixed text-left text-sm">
+                      <colgroup>
+                        <col className="w-[15%]" />
+                        <col className="w-[15%]" />
+                        <col className="w-[15%]" />
+                        <col className="w-[15%]" />
+                        <col className="w-[35%]" />
+                      </colgroup>
                       <thead className="bg-[#FFF0F0] text-gray-700">
                         <tr>
                           <th className="px-4 py-3">JO No.</th>

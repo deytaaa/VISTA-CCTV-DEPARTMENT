@@ -6,6 +6,7 @@ export default function App({ Component, pageProps }) {
   return (
     <>
       <Head>
+        <title>VISTA CCTV</title>
         <link rel="icon" href="/images/City_of_Taguig_logo.png" />
       </Head>
 
