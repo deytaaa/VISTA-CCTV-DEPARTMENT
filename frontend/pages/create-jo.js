@@ -434,12 +434,12 @@ export default function CreateJO() {
 
               <div className="rounded-2xl border border-gray-200 bg-white px-4 py-4">
                 <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Date</label>
-                <input value={date} onChange={(e) => setDate(e.target.value)} type="date" className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-black outline-none focus:border-black" />
+                <input value={date} onChange={(e) => setDate(e.target.value)} type="date" className="w-full rounded-2xl border-[1.5px] border-[#cbd5e1] bg-[#f8fafc] px-4 py-3 text-sm outline-none placeholder:text-gray-400 focus:border-black" />
               </div>
 
               <div className="rounded-2xl border border-gray-200 bg-white px-4 py-4">
                 <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Location</label>
-                <input value={location} onChange={(e) => setLocation(e.target.value)} type="text" placeholder="Enter location" className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-black outline-none placeholder:text-gray-400 focus:border-black" />
+                <input value={location} onChange={(e) => setLocation(e.target.value)} type="text" placeholder="Enter location" className="w-full rounded-2xl border-[1.5px] border-[#cbd5e1] bg-[#f8fafc] px-4 py-3 text-sm outline-none placeholder:text-gray-400 focus:border-black" />
               </div>
 
               <div className="rounded-2xl border border-gray-200 bg-white px-4 py-4">
@@ -447,7 +447,7 @@ export default function CreateJO() {
                 <select
                   value={selectedTechnicianId}
                   onChange={(e) => setSelectedTechnicianId(e.target.value)}
-                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-black outline-none focus:border-black"
+                  className="w-full rounded-2xl border-[1.5px] border-[#cbd5e1] bg-[#f8fafc] px-4 py-3 text-sm outline-none placeholder:text-gray-400 focus:border-black"
                   disabled={techniciansLoading}
                 >
                   <option value="">{techniciansLoading ? 'Loading technicians...' : 'Select a technician'}</option>

@@ -39,9 +39,9 @@ function EmptyState({ title, description }) {
   )
 }
 
-function TableButton({ children, href, onClick, tone = 'default', disabled = false, target, rel }) {
-  const base =
-    'inline-flex items-center justify-center rounded-xl px-3 py-2 text-xs font-semibold transition focus:outline-none focus:ring-2 focus:ring-offset-2'
+function TableButton({ children, href, onClick, tone = 'default', disabled = false, target, rel, compact = false, ariaLabel }) {
+  const base = 'inline-flex items-center justify-center rounded-xl font-semibold transition focus:outline-none focus:ring-2 focus:ring-offset-2'
+  const sizeClass = compact ? 'h-8 w-8 text-xs' : 'px-3 py-2 text-xs'
   const tones = {
     default: 'border border-gray-200 bg-white text-black hover:bg-gray-50 focus:ring-gray-200',
     primary: 'bg-taguigRed text-white hover:bg-taguigDark focus:ring-red-200',
@@ -51,14 +51,14 @@ function TableButton({ children, href, onClick, tone = 'default', disabled = fal
 
   if (href) {
     return (
-      <Link href={href} target={target} rel={rel} className={`${base} ${tones[tone]}`}>
+      <Link href={href} target={target} rel={rel} aria-label={ariaLabel} className={`${base} ${sizeClass} ${tones[tone]}`}>
         {children}
       </Link>
     )
   }
 
   return (
-    <button type="button" onClick={onClick} disabled={disabled} className={`${base} ${tones[tone]} disabled:cursor-not-allowed disabled:opacity-60`}>
+    <button type="button" onClick={onClick} disabled={disabled} aria-label={ariaLabel} className={`${base} ${sizeClass} ${tones[tone]} disabled:cursor-not-allowed disabled:opacity-60`}>
       {children}
     </button>
   )
@@ -66,9 +66,18 @@ function TableButton({ children, href, onClick, tone = 'default', disabled = fal
 
 function formatDate(value) {
   if (!value) return '—'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-  return date.toLocaleDateString('en-US')
+  try {
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return '—'
+
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    const year = String(date.getFullYear())
+
+    return `${month}/${day}/${year}`
+  } catch {
+    return '—'
+  }
 }
 
 function getLatestCompletionReport(row) {
@@ -379,8 +388,11 @@ export default function JOListPage({
         <TableButton href={`/jo/${row.id}`} target="_blank" rel="noreferrer" tone="default">
           View
         </TableButton>
-        <TableButton href={`/jo/${row.id}/pdf`} target="_blank" rel="noreferrer" tone="default">
-          Download PDF
+        <TableButton href={`/jo/${row.id}/pdf`} target="_blank" rel="noreferrer" tone="default" compact ariaLabel="Download PDF">
+          <span className="sr-only">Download PDF</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-4 w-4" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 3v10m0 0l4-4m-4 4l-4-4M4 17v2h16v-2" />
+          </svg>
         </TableButton>
       </>
     )
@@ -560,7 +572,7 @@ export default function JOListPage({
                   value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
                   placeholder="Search by JO No. or Location..."
-                  className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none placeholder:text-gray-400 focus:border-black"
+                  className="w-full rounded-2xl border-[1.5px] border-[#cbd5e1] bg-[#f8fafc] px-4 py-3 text-sm outline-none placeholder:text-gray-400 focus:border-black"
                 />
               </label>
 
@@ -572,7 +584,7 @@ export default function JOListPage({
                       type="date"
                       value={dateFromInput}
                       onChange={(e) => setDateFromInput(e.target.value)}
-                      className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none placeholder:text-gray-400 focus:border-black"
+                      className="w-full rounded-2xl border-[1.5px] border-[#cbd5e1] bg-[#f8fafc] px-4 py-3 text-sm outline-none placeholder:text-gray-400 focus:border-black"
                     />
                   </label>
 
@@ -582,7 +594,7 @@ export default function JOListPage({
                       type="date"
                       value={dateToInput}
                       onChange={(e) => setDateToInput(e.target.value)}
-                      className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-black"
+                      className="w-full rounded-2xl border-[1.5px] border-[#cbd5e1] bg-[#f8fafc] px-4 py-3 text-sm outline-none focus:border-black"
                     />
                   </label>
                 </div>
@@ -593,7 +605,7 @@ export default function JOListPage({
                     <select
                       value={statusFilter}
                       onChange={(e) => setStatusFilter(e.target.value)}
-                      className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-black"
+                      className="w-full rounded-2xl border-[1.5px] border-[#cbd5e1] bg-[#f8fafc] px-4 py-3 text-sm outline-none focus:border-black"
                     >
                       {statusOptions.map((option) => (
                         <option key={option.value} value={option.value}>
@@ -631,13 +643,23 @@ export default function JOListPage({
                 <>
                   <div className="overflow-x-auto">
                     <table className="w-full min-w-[780px] table-fixed text-left text-sm">
-                      <colgroup>
-                        <col className="w-[15%]" />
-                        <col className="w-[15%]" />
-                        <col className="w-[15%]" />
-                        <col className="w-[15%]" />
-                        <col className="w-[35%]" />
-                      </colgroup>
+                      {isTechnicianView ? (
+                        <colgroup>
+                          <col className="w-[15%]" />
+                          <col className="w-[24%]" />
+                          <col className="w-[17%]" />
+                          <col className="w-[16%]" />
+                          <col className="w-[28%]" />
+                        </colgroup>
+                      ) : (
+                        <colgroup>
+                          <col className="w-[15%]" />
+                          <col className="w-[15%]" />
+                          <col className="w-[15%]" />
+                          <col className="w-[15%]" />
+                          <col className="w-[35%]" />
+                        </colgroup>
+                      )}
                       <thead className="bg-[#FFF0F0] text-gray-700">
                         <tr>
                           <th className="px-4 py-3">JO No.</th>
@@ -656,7 +678,7 @@ export default function JOListPage({
                           return (
                             <tr key={row.id} className="border-t border-gray-100 align-top">
                               <td className="px-4 py-4 font-medium text-black">{isDraft ? '—' : row.jo_number || '—'}</td>
-                              <td className="px-4 py-4 text-gray-700">{row.location || '—'}</td>
+                              <td className="px-4 py-4 text-gray-700 whitespace-nowrap">{row.location || '—'}</td>
                               <td className="px-4 py-4 text-gray-700">{formatDate(row.date)}</td>
                               <td className="px-4 py-4 text-gray-700">
                                 <JOStatusBadge status={row.status} technicianView={isTechnicianView} />

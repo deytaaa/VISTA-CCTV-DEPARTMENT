@@ -37,14 +37,16 @@ export default function Header({ title, subtitle, actions = null, mobileOpen = f
             </svg>
           </button>
 
-          {/* Desktop reopen button when sidebar is collapsed */}
-          {sidebarHidden ? (
-            <button onClick={() => setSidebarHidden(false)} aria-label="Open sidebar" className="hidden md:inline-flex -ml-2 mr-2 h-10 w-10 items-center justify-center rounded-md bg-[#CC0000] text-white">
+          {/* Desktop sidebar toggle */}
+          <button
+            onClick={() => setSidebarHidden((current) => !current)}
+            aria-label={sidebarHidden ? 'Open sidebar' : 'Hide sidebar'}
+            className="hidden md:inline-flex h-10 w-10 items-center justify-center rounded-md bg-[#CC0000] text-white"
+          >
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-6 w-6">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
               </svg>
-            </button>
-          ) : null}
+          </button>
 
           {/* Mobile brand */}
           <div className="flex items-center gap-2 md:hidden">
