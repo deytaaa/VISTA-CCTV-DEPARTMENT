@@ -10,6 +10,25 @@ const router = express.Router();
 const SEQ_FILE = path.join(__dirname, '..', 'jo-sequence.json');
 const upload = multer({ storage: multer.memoryStorage() });
 
+function resolveStoragePath(proofFile) {
+  if (!proofFile) return null;
+
+  const rawValue = String(proofFile).trim();
+  if (!rawValue) return null;
+
+  if (rawValue.startsWith('proofs/')) {
+    return rawValue;
+  }
+
+  const bucketMarker = '/signed-jo-proofs/';
+  const bucketIndex = rawValue.indexOf(bucketMarker);
+  if (bucketIndex >= 0) {
+    return rawValue.slice(bucketIndex + bucketMarker.length).split('?')[0].split('#')[0];
+  }
+
+  return null;
+}
+
 async function generateJoNumberViaRpc() {
   // Try calling a Postgres function 'generate_jo_number' if the project has one.
   try {
@@ -104,16 +123,25 @@ router.post('/upload-proof', authMiddleware, requireAnyRole(['admin', 'technicia
 
   const bucket = 'signed-jo-proofs';
   const jobOrderId = req.body?.jobOrderId || 'unknown-job-order';
+  const previousProofFile = req.body?.previousProofFile || req.body?.proofFile || req.body?.proof_url || null;
   const fileExt = String(req.file.originalname || '').split('.').pop() || 'bin';
-  const fileName = `${jobOrderId}-${Date.now()}.${fileExt}`;
-  const filePath = `proofs/${fileName}`;
+  // Use a deterministic path per job order so re-uploads replace the existing file when upsert is true
+  const filePath = `proofs/${jobOrderId}.${fileExt}`;
   try {
+    const previousPath = resolveStoragePath(previousProofFile);
+    if (previousPath) {
+      const { error: removeError } = await supabase.storage.from(bucket).remove([previousPath]);
+      if (removeError) {
+        console.warn('Failed to remove previous proof file before re-upload', removeError);
+      }
+    }
+
     const { data, error: uploadError } = await supabase.storage
       .from(bucket)
       .upload(filePath, req.file.buffer, {
         cacheControl: '3600',
         contentType: req.file.mimetype,
-        upsert: false,
+        upsert: true,
       });
 
     if (uploadError) {

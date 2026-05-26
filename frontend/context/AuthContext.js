@@ -10,10 +10,12 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true)
 
   async function syncBackendSession(nextSession) {
+    setLoading(true)
     setSession(nextSession)
+    setProfile(null)
 
     if (!nextSession?.access_token) {
-      setProfile(null)
+      setLoading(false)
       return
     }
 
@@ -26,6 +28,7 @@ export function AuthProvider({ children }) {
 
       if (!response.ok) {
         setProfile(null)
+        setLoading(false)
         return
       }
 
@@ -34,6 +37,8 @@ export function AuthProvider({ children }) {
     } catch (error) {
       console.error('Failed to sync backend session', error)
       setProfile(null)
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -56,7 +61,7 @@ export function AuthProvider({ children }) {
     loadSession()
 
     const { data: subscription } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      syncBackendSession(nextSession).finally(() => setLoading(false))
+      syncBackendSession(nextSession)
     })
 
     return () => {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/router'
 import ProtectedRoute from '../../../components/ProtectedRoute'
@@ -98,10 +98,17 @@ export default function JobOrderViewPage() {
   const [error, setError] = useState('')
   const [jobOrder, setJobOrder] = useState(null)
   const [proofFile, setProofFile] = useState(null)
+  const [proofPreview, setProofPreview] = useState(null)
   const [proofRemarks, setProofRemarks] = useState('')
   const [proofLoading, setProofLoading] = useState(false)
   const [actionLoading, setActionLoading] = useState(false)
   const [actionError, setActionError] = useState('')
+  const fileInputRef = useRef(null)
+  const cameraVideoRef = useRef(null)
+  const cameraStreamRef = useRef(null)
+  const [cameraOpen, setCameraOpen] = useState(false)
+  const [cameraError, setCameraError] = useState('')
+  const [cameraFacingMode, setCameraFacingMode] = useState('environment')
 
   const latestReport = useMemo(() => latestCompletionReport(jobOrder), [jobOrder])
   const proofUrl = useMemo(() => {
@@ -119,6 +126,53 @@ export default function JobOrderViewPage() {
   const isProcessingOrBeyond = ['processing', 'completed', 'for_approval', 'approved', 'rejected'].includes(status)
   const rejectionRemarks = jobOrder?.rejection_remarks?.trim()
   const approvalTimestamp = jobOrder?.updated_at ? formatDateTime(jobOrder.updated_at) : '—'
+
+  useEffect(() => {
+    return () => {
+      if (proofPreview?.url) {
+        URL.revokeObjectURL(proofPreview.url)
+      }
+
+      if (cameraStreamRef.current) {
+        cameraStreamRef.current.getTracks().forEach((track) => track.stop())
+        cameraStreamRef.current = null
+      }
+    }
+  }, [proofPreview])
+
+  useEffect(() => {
+    if (!cameraOpen) return undefined
+
+    let cancelled = false
+
+    async function startCamera() {
+      try {
+        setCameraError('')
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: cameraFacingMode } },
+          audio: false,
+        })
+
+        if (cancelled) {
+          stream.getTracks().forEach((track) => track.stop())
+          return
+        }
+
+        cameraStreamRef.current = stream
+        if (cameraVideoRef.current) {
+          cameraVideoRef.current.srcObject = stream
+        }
+      } catch (cameraLoadError) {
+        setCameraError('Camera access is not available. Please use Choose File instead.')
+      }
+    }
+
+    startCamera()
+
+    return () => {
+      cancelled = true
+    }
+  }, [cameraFacingMode, cameraOpen])
 
   useEffect(() => {
     let mounted = true
@@ -171,6 +225,141 @@ export default function JobOrderViewPage() {
     }
 
     setJobOrder(data || null)
+  }
+
+  function handleFileSelect(event) {
+    const file = event.target.files?.[0] || null
+
+    if (proofPreview?.url) {
+      URL.revokeObjectURL(proofPreview.url)
+    }
+
+    if (!file) {
+      setProofFile(null)
+      setProofPreview(null)
+      return
+    }
+
+    const allowedTypes = ['image/jpeg', 'image/png', 'application/pdf']
+    if (!allowedTypes.includes(file.type)) {
+      setActionError('Only JPG, PNG, and PDF files are allowed.')
+      event.target.value = ''
+      setProofFile(null)
+      setProofPreview(null)
+      return
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setActionError('File too large. Maximum size is 5MB.')
+      event.target.value = ''
+      setProofFile(null)
+      setProofPreview(null)
+      return
+    }
+
+    setActionError('')
+    setProofFile(file)
+
+    if (file.type === 'application/pdf') {
+      setProofPreview({ type: 'pdf', name: file.name })
+    } else {
+      setProofPreview({ type: 'image', name: file.name, url: URL.createObjectURL(file) })
+    }
+  }
+
+  function openCameraCapture() {
+    setCameraError('')
+    setCameraFacingMode('environment')
+    setCameraOpen(true)
+  }
+
+  function switchCameraFacingMode() {
+    const nextFacingMode = cameraFacingMode === 'environment' ? 'user' : 'environment'
+
+    if (cameraStreamRef.current) {
+      cameraStreamRef.current.getTracks().forEach((track) => track.stop())
+      cameraStreamRef.current = null
+    }
+
+    if (cameraVideoRef.current) {
+      cameraVideoRef.current.srcObject = null
+    }
+
+    setCameraError('')
+    setCameraFacingMode(nextFacingMode)
+    setCameraOpen(true)
+  }
+
+  function openFilePicker() {
+    fileInputRef.current?.click()
+  }
+
+  function closeCameraCapture() {
+    if (cameraStreamRef.current) {
+      cameraStreamRef.current.getTracks().forEach((track) => track.stop())
+      cameraStreamRef.current = null
+    }
+
+    if (cameraVideoRef.current) {
+      cameraVideoRef.current.srcObject = null
+    }
+
+    setCameraError('')
+    setCameraOpen(false)
+  }
+
+  async function capturePhoto() {
+    const video = cameraVideoRef.current
+    const stream = cameraStreamRef.current
+
+    if (!video || !stream) {
+      setCameraError('Camera is not ready yet.')
+      return
+    }
+
+    const width = video.videoWidth || 1280
+    const height = video.videoHeight || 720
+    const canvas = document.createElement('canvas')
+    canvas.width = width
+    canvas.height = height
+
+    const context = canvas.getContext('2d')
+    if (!context) {
+      setCameraError('Unable to capture photo.')
+      return
+    }
+
+    context.drawImage(video, 0, 0, width, height)
+
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        setCameraError('Unable to capture photo.')
+        return
+      }
+
+      const file = new File([blob], `proof-${Date.now()}.jpg`, { type: 'image/jpeg' })
+
+      if (proofPreview?.url) {
+        URL.revokeObjectURL(proofPreview.url)
+      }
+
+      setActionError('')
+      setProofFile(file)
+      setProofPreview({ type: 'image', name: file.name, url: URL.createObjectURL(file) })
+      closeCameraCapture()
+    }, 'image/jpeg', 0.92)
+  }
+
+  function retakePhoto() {
+    if (proofPreview?.url) {
+      URL.revokeObjectURL(proofPreview.url)
+    }
+
+    setProofFile(null)
+    setProofPreview(null)
+    setCameraFacingMode('environment')
+    setCameraError('')
+    setCameraOpen(true)
   }
 
   async function markProcessing() {
@@ -253,6 +442,7 @@ export default function JobOrderViewPage() {
         body: JSON.stringify({
           job_order_id: jobOrder.id,
           proof_file: uploadPayload?.publicURL || uploadPayload?.path,
+          previousProofFile: latestReport?.proof_file || null,
           remarks: proofRemarks.trim(),
           completed_at: new Date().toISOString(),
         }),
@@ -264,6 +454,10 @@ export default function JobOrderViewPage() {
       }
 
       setProofFile(null)
+      if (proofPreview?.url) {
+        URL.revokeObjectURL(proofPreview.url)
+      }
+      setProofPreview(null)
       setProofRemarks('')
       await refreshJobOrder()
     } catch (saveError) {
@@ -421,15 +615,68 @@ export default function JobOrderViewPage() {
                 <div id="proof-upload-section" className="mt-6 rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-5">
                   <h3 className="text-base font-bold text-black">Upload Proof</h3>
                   <div className="mt-4 space-y-4">
-                    <label className="block">
-                      <span className="mb-2 block text-sm font-semibold text-black">File</span>
+                    <div className="space-y-3">
+                      <span className="block text-sm font-semibold text-black">File</span>
+                      <div className="flex flex-col gap-3 sm:flex-row">
+                        <button
+                          type="button"
+                          onClick={openCameraCapture}
+                          className="inline-flex cursor-pointer items-center justify-center rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-black transition hover:bg-gray-50"
+                        >
+                          📷 Take Photo
+                        </button>
+                        <button
+                          type="button"
+                          onClick={openFilePicker}
+                          className="inline-flex cursor-pointer items-center justify-center rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-black transition hover:bg-gray-50"
+                        >
+                          📎 Choose File
+                        </button>
+                      </div>
+
                       <input
+                        ref={fileInputRef}
                         type="file"
-                        accept=".jpg,.jpeg,.png,.pdf"
-                        onChange={(e) => setProofFile(e.target.files?.[0] || null)}
-                        className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm text-black outline-none"
+                        accept=".jpg,.png,.pdf"
+                        onChange={handleFileSelect}
+                        className="sr-only"
                       />
-                    </label>
+                      <p className="text-xs text-gray-500">Accepted formats: JPG, PNG, PDF. Maximum file size is 5MB.</p>
+
+                      {proofPreview ? (
+                        <div className="rounded-2xl border border-gray-200 bg-white p-4">
+                          {proofPreview.type === 'image' ? (
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                              <img src={proofPreview.url} alt="Proof preview" className="h-20 w-20 rounded-xl border border-gray-200 object-cover" />
+                              <div className="flex-1">
+                                <p className="text-sm font-semibold text-black">Image Preview</p>
+                                <p className="text-sm text-gray-500">{proofPreview.name}</p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={retakePhoto}
+                                className="inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-black transition hover:bg-gray-50"
+                              >
+                                Retake Photo
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-3">
+                              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-red-50 text-red-600">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-6 w-6" aria-hidden="true">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 3v4a1 1 0 001 1h4" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 21H7a2 2 0 01-2-2V5a2 2 0 012-2h7l5 5v11a2 2 0 01-2 2z" />
+                                </svg>
+                              </div>
+                              <div>
+                                <p className="text-sm font-semibold text-black">PDF Preview</p>
+                                <p className="text-sm text-gray-500">{proofPreview.name}</p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ) : null}
+                    </div>
                     <label className="block">
                       <span className="mb-2 block text-sm font-semibold text-black">Completion Remarks</span>
                       <textarea
@@ -448,6 +695,58 @@ export default function JobOrderViewPage() {
                         className="rounded-2xl bg-taguigRed px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         {proofLoading ? 'Uploading...' : 'Save Proof'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
+              {cameraOpen ? (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6">
+                  <div className="w-full max-w-2xl rounded-[24px] bg-white p-5 shadow-2xl">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <h3 className="text-lg font-bold text-black">Take Photo</h3>
+                        <p className="text-sm text-gray-500">Point the camera at the proof and capture it.</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={switchCameraFacingMode}
+                          className="rounded-full border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-black hover:bg-gray-50"
+                        >
+                          {cameraFacingMode === 'environment' ? 'Front Camera' : 'Back Camera'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={closeCameraCapture}
+                          className="rounded-full border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-black hover:bg-gray-50"
+                        >
+                          Close
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 overflow-hidden rounded-2xl border border-gray-200 bg-black">
+                      <video ref={cameraVideoRef} autoPlay playsInline className="h-[360px] w-full object-cover" />
+                    </div>
+
+                    {cameraError ? <p className="mt-3 text-sm text-red-600">{cameraError}</p> : null}
+
+                    <div className="mt-4 flex items-center justify-end gap-3">
+                      <button
+                        type="button"
+                        onClick={closeCameraCapture}
+                        className="rounded-2xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-gray-50"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={capturePhoto}
+                        className="rounded-2xl bg-taguigRed px-4 py-2 text-sm font-semibold text-white transition hover:bg-taguigDark"
+                      >
+                        Capture Photo
                       </button>
                     </div>
                   </div>

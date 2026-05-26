@@ -87,6 +87,30 @@ module.exports = {
 
       const { data, error, count } = await query.range(from, to);
       if (error) return res.status(500).json({ error: error.message || error });
+
+      // Ensure the frontend receives only the latest completion_report per job order
+      if (Array.isArray(data) && data.length > 0) {
+        try {
+          const ids = data.map((d) => d.id).filter(Boolean);
+          const { data: reports, error: repErr } = await supabase
+            .from('completion_reports')
+            .select('*')
+            .in('job_order_id', ids)
+            .order('completed_at', { ascending: false });
+          if (!repErr && Array.isArray(reports)) {
+            const latestMap = {};
+            for (const r of reports) {
+              if (!latestMap[r.job_order_id]) latestMap[r.job_order_id] = r;
+            }
+            for (const jo of data) {
+              jo.completion_reports = latestMap[jo.id] ? [latestMap[jo.id]] : [];
+            }
+          }
+        } catch (e) {
+          console.warn('Failed to fetch latest completion reports', e);
+        }
+      }
+
       return res.json({
         data,
         meta: {
@@ -110,6 +134,24 @@ module.exports = {
         .eq('id', id)
         .single();
       if (error) return res.status(404).json({ error: error.message || error });
+
+      // Replace nested completion_reports with the single latest one
+      try {
+        const { data: reports, error: repErr } = await supabase
+          .from('completion_reports')
+          .select('*')
+          .eq('job_order_id', id)
+          .order('completed_at', { ascending: false })
+          .limit(1);
+        if (!repErr && Array.isArray(reports) && reports.length > 0) {
+          data.completion_reports = [reports[0]];
+        } else {
+          data.completion_reports = [];
+        }
+      } catch (e) {
+        console.warn('Failed to fetch latest completion report for job order', e);
+      }
+
       return res.json({ data });
     } catch (err) {
       console.error(err);

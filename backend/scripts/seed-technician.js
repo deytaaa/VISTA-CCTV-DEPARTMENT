@@ -2,9 +2,9 @@ require('dotenv').config();
 const supabase = require('../lib/supabase');
 
 async function run() {
-  const email = process.env.SEED_TECHNICIAN_EMAIL || 'technician@taguig.gov';
-  const password = process.env.SEED_TECHNICIAN_PASSWORD || 'ChangeMe123!';
-  const name = process.env.SEED_TECHNICIAN_NAME || 'Technician User';
+  const email = process.env.SEED_TECHNICIAN_EMAIL || 'vhon@gmail.com';
+  const password = process.env.SEED_TECHNICIAN_PASSWORD || 'vhon123';
+  const name = process.env.SEED_TECHNICIAN_NAME || 'vhon kuwan';
   const role = 'technician';
 
   console.log('Seeding technician user:', email);
