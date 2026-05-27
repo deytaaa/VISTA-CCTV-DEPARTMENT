@@ -1,11 +1,9 @@
 import { useAuth } from '../../context/AuthContext'
 import NotificationDropdown from '../shared/NotificationDropdown'
-import { useRouter } from 'next/router'
 import { supabase } from '../../lib/supabaseClient'
 
 export default function Header({ title, subtitle, actions = null, mobileOpen = false, setMobileOpen = () => {}, sidebarHidden = false, setSidebarHidden = () => {} }) {
   const { user, role } = useAuth()
-  const router = useRouter()
 
   async function handleSignOut() {
     try {
@@ -16,14 +14,15 @@ export default function Header({ title, subtitle, actions = null, mobileOpen = f
 
     try {
       if (typeof window !== 'undefined') {
-        window.localStorage.clear()
+        window.localStorage.removeItem('userRole')
+        window.localStorage.removeItem('userData')
         window.sessionStorage.clear()
       }
     } catch (e) {
       // ignore
     }
 
-    router.push('/login')
+    window.location.href = '/login'
   }
 
   return (

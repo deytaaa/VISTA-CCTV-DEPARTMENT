@@ -61,6 +61,13 @@ export function AuthProvider({ children }) {
     loadSession()
 
     const { data: subscription } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      if (!nextSession?.access_token) {
+        setSession(null)
+        setProfile(null)
+        setLoading(false)
+        return
+      }
+
       syncBackendSession(nextSession)
     })
 
@@ -75,7 +82,7 @@ export function AuthProvider({ children }) {
       session,
       user: session?.user ?? null,
       profile,
-      role: profile?.role ?? session?.user?.user_metadata?.role ?? session?.user?.app_metadata?.role ?? null,
+      role: profile?.role ?? null,
       loading,
       isAuthenticated: Boolean(session),
     }),

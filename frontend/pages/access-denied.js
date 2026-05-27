@@ -11,7 +11,7 @@ export default function AccessDenied() {
         </p>
 
         <div className="mt-6 flex flex-wrap gap-3">
-          <Link href="/" className="rounded-2xl bg-black px-4 py-3 text-sm font-semibold text-white">
+          <Link href="/dashboard" className="rounded-2xl bg-black px-4 py-3 text-sm font-semibold text-white">
             Back to Dashboard
           </Link>
           <Link href="/login" className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-semibold text-black">

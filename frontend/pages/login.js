@@ -28,12 +28,32 @@ export default function Login() {
     setError(null)
     setLoading(true)
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
 
     if (error) {
       setError(error.message)
       setLoading(false)
       return
+    }
+
+    const { data: authUserData, error: userError } = await supabase.auth.getUser()
+    if (userError) {
+      setError(userError.message)
+      setLoading(false)
+      return
+    }
+
+    const accessToken = data?.session?.access_token
+    if (accessToken && authUserData?.user?.id) {
+      try {
+        await fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}/api/auth/me`, {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        })
+      } catch (refreshError) {
+        console.error('Failed to refresh user profile after login', refreshError)
+      }
     }
 
     router.replace(getNextPath())

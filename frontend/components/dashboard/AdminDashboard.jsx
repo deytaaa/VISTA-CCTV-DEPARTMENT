@@ -156,6 +156,11 @@ export default function AdminDashboard() {
 
   async function handleSignOut() {
     await supabase.auth.signOut()
+    if (typeof window !== 'undefined') {
+      window.localStorage.removeItem('userRole')
+      window.localStorage.removeItem('userData')
+      window.sessionStorage.clear()
+    }
     window.location.href = '/login'
   }
 
