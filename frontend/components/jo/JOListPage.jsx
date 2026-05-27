@@ -64,6 +64,24 @@ function TableButton({ children, href, onClick, tone = 'default', disabled = fal
   )
 }
 
+function ProofSavedBadge() {
+  return (
+    <span
+      title="Proof Saved"
+      aria-label="Proof Saved"
+      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 shadow-sm"
+    >
+      <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4" aria-hidden="true">
+        <path
+          fillRule="evenodd"
+          d="M16.704 5.296a1 1 0 0 1 0 1.414l-7 7a1 1 0 0 1-1.414 0l-3-3a1 1 0 0 1 1.414-1.414L9 11.586l6.29-6.29a1 1 0 0 1 1.414 0Z"
+          clipRule="evenodd"
+        />
+      </svg>
+    </span>
+  )
+}
+
 function formatDate(value) {
   if (!value) return '—'
   try {
@@ -339,12 +357,26 @@ export default function JOListPage({
     return payload
   }
 
-  function handleMarkProcessing(jobOrderId) {
-    technicianRequest({ id: jobOrderId, url: `/api/job-orders/${jobOrderId}/processing` })
+  async function handleSubmitForApproval(jobOrderId) {
+    if (!session?.access_token) return
+
+    if (!window.confirm('Submit this job order for approval?')) return
+
+    setError(null)
+    setActionLoadingId(jobOrderId)
+
+    try {
+      await requestApproval(jobOrderId)
+      setRefreshTick((value) => value + 1)
+    } catch (submitError) {
+      setError(submitError.message)
+    } finally {
+      setActionLoadingId(null)
+    }
   }
 
-  function handleMarkCompleted(jobOrderId) {
-    technicianRequest({ id: jobOrderId, url: `/api/job-orders/${jobOrderId}/complete` })
+  function handleMarkProcessing(jobOrderId) {
+    technicianRequest({ id: jobOrderId, url: `/api/job-orders/${jobOrderId}/processing` })
   }
 
   function openProofModal(row) {
@@ -434,8 +466,6 @@ export default function JOListPage({
         throw new Error(completionPayload?.error || 'Failed to save completion proof')
       }
 
-      await requestApproval(proofJobOrder.id)
-
       setRefreshTick((value) => value + 1)
       setProofToast({ visible: true, exiting: false })
       closeProofModal()
@@ -477,21 +507,44 @@ export default function JOListPage({
     }
 
     if (status === 'processing') {
+      if (hasProof) {
+        return (
+          <div className="flex min-w-max flex-nowrap items-center gap-2">
+            {pdfActions}
+            <ProofSavedBadge />
+            <TableButton tone="primary" disabled={actionLoadingId === row.id} onClick={() => handleSubmitForApproval(row.id)}>
+              Submit for Approval
+            </TableButton>
+          </div>
+        )
+      }
+
       return (
         <div className="flex min-w-max flex-nowrap items-center gap-2">
           {pdfActions}
           <TableButton tone="default" disabled={actionLoadingId === row.id} onClick={() => openProofModal(row)}>
             Upload Proof
           </TableButton>
-          <TableButton tone="success" disabled={actionLoadingId === row.id} onClick={() => handleMarkCompleted(row.id)}>
-            Mark as Completed
-          </TableButton>
-          {hasProof ? <span className="inline-flex items-center rounded-full bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">Proof uploaded</span> : null}
         </div>
       )
     }
 
     if (status === 'rejected') {
+      if (hasProof) {
+        return (
+          <div className="flex min-w-max flex-nowrap items-center gap-2">
+            {pdfActions}
+            <ProofSavedBadge />
+            <TableButton tone="primary" disabled={proofLoading || actionLoadingId === row.id} onClick={() => openProofModal(row)}>
+              Re-upload Proof
+            </TableButton>
+            <TableButton tone="primary" disabled={actionLoadingId === row.id} onClick={() => handleSubmitForApproval(row.id)}>
+              Submit for Approval
+            </TableButton>
+          </div>
+        )
+      }
+
       return (
         <div className="flex min-w-max flex-nowrap items-center gap-2">
           {pdfActions}

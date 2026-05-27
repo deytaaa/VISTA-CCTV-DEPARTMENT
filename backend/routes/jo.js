@@ -125,8 +125,8 @@ router.post('/upload-proof', authMiddleware, requireAnyRole(['admin', 'technicia
   const jobOrderId = req.body?.jobOrderId || 'unknown-job-order';
   const previousProofFile = req.body?.previousProofFile || req.body?.proofFile || req.body?.proof_url || null;
   const fileExt = String(req.file.originalname || '').split('.').pop() || 'bin';
-  // Use a deterministic path per job order so re-uploads replace the existing file when upsert is true
-  const filePath = `proofs/${jobOrderId}.${fileExt}`;
+  // Use a unique path per upload so a re-upload always produces a fresh public URL.
+  const filePath = `proofs/${jobOrderId}-${Date.now()}.${fileExt}`;
   try {
     const previousPath = resolveStoragePath(previousProofFile);
     if (previousPath) {

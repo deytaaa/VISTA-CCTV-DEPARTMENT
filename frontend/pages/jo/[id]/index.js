@@ -115,14 +115,18 @@ export default function JobOrderViewPage() {
     const proofFileName = latestReport?.proof_file
     if (!proofFileName) return ''
     if (proofFileName.startsWith('http')) return proofFileName
-    return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/signed-jo-proofs/${proofFileName}`
+    // Append a cache-busting timestamp so re-uploads with the same storage
+    // path (upsert) return fresh content instead of a cached image.
+    const base = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/signed-jo-proofs/${proofFileName}`
+    const ts = latestReport?.completed_at || latestReport?.updated_at || new Date().toISOString()
+    // If the URL already has query params, append with & otherwise use ?
+    return `${base}${base.includes('?') ? '&' : '?'}t=${encodeURIComponent(ts)}`
   }, [latestReport])
 
   const isTechnician = role === 'technician'
   const status = (jobOrder?.status || '').toLowerCase()
   const canUploadProof = isTechnician && status === 'processing'
   const canMarkProcessing = isTechnician && status === 'sent'
-  const canMarkCompleted = isTechnician && status === 'processing'
   const isProcessingOrBeyond = ['processing', 'completed', 'for_approval', 'approved', 'rejected'].includes(status)
   const rejectionRemarks = jobOrder?.rejection_remarks?.trim()
   const approvalTimestamp = jobOrder?.updated_at ? formatDateTime(jobOrder.updated_at) : '—'
@@ -467,38 +471,6 @@ export default function JobOrderViewPage() {
     }
   }
 
-  async function markCompleted() {
-    if (!session?.access_token || !jobOrder?.id) return
-
-    if (!latestReport?.proof_file) {
-      setActionError('Please upload signed JO proof before marking as completed')
-      return
-    }
-
-    setActionError('')
-    setActionLoading(true)
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/job-orders/${jobOrder.id}/complete`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
-      })
-
-      const payload = await response.json()
-      if (!response.ok) {
-        throw new Error(payload?.error || 'Failed to mark as completed')
-      }
-
-      await refreshJobOrder()
-    } catch (requestError) {
-      setActionError(requestError.message)
-    } finally {
-      setActionLoading(false)
-    }
-  }
-
   return (
     <ProtectedRoute allowedRoles={['admin', 'technician']}>
       <Layout title="Job Order Details" subtitle={jobOrder?.jo_number || 'Job Order'}>
@@ -529,23 +501,13 @@ export default function JobOrderViewPage() {
                 <ActionButton href={`/jo/${jobOrder?.id}/pdf`}>Download PDF</ActionButton>
                 {isTechnician ? (
                   <>
-                  {canMarkProcessing ? (
-                    <ActionButton tone="primary" onClick={markProcessing} disabled={actionLoading}>
-                      Mark as Processing
-                    </ActionButton>
-                  ) : null}
-                  {canUploadProof ? (
-                    <ActionButton tone="default" onClick={() => document.getElementById('proof-upload-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
-                      Upload Proof
-                    </ActionButton>
-                  ) : null}
-                  {canMarkCompleted ? (
-                    <ActionButton tone="success" onClick={markCompleted} disabled={actionLoading}>
-                      Mark as Completed
-                    </ActionButton>
-                  ) : null}
-                </>
-              ) : null}
+                    {canMarkProcessing ? (
+                      <ActionButton tone="primary" onClick={markProcessing} disabled={actionLoading}>
+                        Mark as Processing
+                      </ActionButton>
+                    ) : null}
+                  </>
+                ) : null}
               </div>
             </div>
           </section>
@@ -611,95 +573,7 @@ export default function JobOrderViewPage() {
                 <p className="mt-4 text-sm text-gray-500">No completion report has been uploaded yet.</p>
               )}
 
-              {canUploadProof ? (
-                <div id="proof-upload-section" className="mt-6 rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-5">
-                  <h3 className="text-base font-bold text-black">Upload Proof</h3>
-                  <div className="mt-4 space-y-4">
-                    <div className="space-y-3">
-                      <span className="block text-sm font-semibold text-black">File</span>
-                      <div className="flex flex-col gap-3 sm:flex-row">
-                        <button
-                          type="button"
-                          onClick={openCameraCapture}
-                          className="inline-flex cursor-pointer items-center justify-center rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-black transition hover:bg-gray-50"
-                        >
-                          📷 Take Photo
-                        </button>
-                        <button
-                          type="button"
-                          onClick={openFilePicker}
-                          className="inline-flex cursor-pointer items-center justify-center rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-black transition hover:bg-gray-50"
-                        >
-                          📎 Choose File
-                        </button>
-                      </div>
-
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept=".jpg,.png,.pdf"
-                        onChange={handleFileSelect}
-                        className="sr-only"
-                      />
-                      <p className="text-xs text-gray-500">Accepted formats: JPG, PNG, PDF. Maximum file size is 5MB.</p>
-
-                      {proofPreview ? (
-                        <div className="rounded-2xl border border-gray-200 bg-white p-4">
-                          {proofPreview.type === 'image' ? (
-                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                              <img src={proofPreview.url} alt="Proof preview" className="h-20 w-20 rounded-xl border border-gray-200 object-cover" />
-                              <div className="flex-1">
-                                <p className="text-sm font-semibold text-black">Image Preview</p>
-                                <p className="text-sm text-gray-500">{proofPreview.name}</p>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={retakePhoto}
-                                className="inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-black transition hover:bg-gray-50"
-                              >
-                                Retake Photo
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-3">
-                              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-red-50 text-red-600">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-6 w-6" aria-hidden="true">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 3v4a1 1 0 001 1h4" />
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 21H7a2 2 0 01-2-2V5a2 2 0 012-2h7l5 5v11a2 2 0 01-2 2z" />
-                                </svg>
-                              </div>
-                              <div>
-                                <p className="text-sm font-semibold text-black">PDF Preview</p>
-                                <p className="text-sm text-gray-500">{proofPreview.name}</p>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      ) : null}
-                    </div>
-                    <label className="block">
-                      <span className="mb-2 block text-sm font-semibold text-black">Completion Remarks</span>
-                      <textarea
-                        value={proofRemarks}
-                        onChange={(e) => setProofRemarks(e.target.value)}
-                        rows={4}
-                        className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:border-black"
-                        placeholder="Enter completion remarks"
-                      />
-                    </label>
-                    <div className="flex justify-end">
-                      <button
-                        type="button"
-                        onClick={uploadProofAndSave}
-                        disabled={proofLoading}
-                        className="rounded-2xl bg-taguigRed px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {proofLoading ? 'Uploading...' : 'Save Proof'}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ) : null}
+              {/* Upload handled via Job Orders actions; technicians upload from the table only. */}
 
               {cameraOpen ? (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6">

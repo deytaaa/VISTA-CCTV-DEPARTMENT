@@ -94,7 +94,7 @@ module.exports = {
           const ids = data.map((d) => d.id).filter(Boolean);
           const { data: reports, error: repErr } = await supabase
             .from('completion_reports')
-            .select('*')
+            .select('*, completed_by_user:users!completion_reports_completed_by_fkey(id, name, email, role)')
             .in('job_order_id', ids)
             .order('completed_at', { ascending: false });
           if (!repErr && Array.isArray(reports)) {
@@ -139,7 +139,7 @@ module.exports = {
       try {
         const { data: reports, error: repErr } = await supabase
           .from('completion_reports')
-          .select('*')
+          .select('*, completed_by_user:users!completion_reports_completed_by_fkey(id, name, email, role)')
           .eq('job_order_id', id)
           .order('completed_at', { ascending: false })
           .limit(1);
