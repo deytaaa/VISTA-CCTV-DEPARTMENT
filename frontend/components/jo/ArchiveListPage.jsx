@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext'
 import Layout from '../layout/Layout'
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || ''
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
 
 function formatDate(value) {
   if (!value) return '—'
@@ -220,9 +221,32 @@ export default function ArchiveListPage({ title, description, allowedRoles = ['a
                             <td className="px-4 py-4 text-gray-700">{formatDateTime(row.updated_at || row.created_at)}</td>
                             <td className="px-4 py-4">
                               <div className="flex flex-wrap gap-2">
+                                {/* View Proof: opens the uploaded signed JO proof image/PDF in a new tab when available */}
                                 <TableButton href={`/jo/${row.id}`} target="_blank" rel="noreferrer" tone="default">
                                   View
                                 </TableButton>
+
+                                {(() => {
+                                  const proofFile = Array.isArray(row?.completion_reports) ? row.completion_reports[0]?.proof_file : null
+                                  if (!proofFile) return null
+
+                                  // Build public URL for Supabase storage or use absolute URL
+                                  const base = proofFile.startsWith('http') ? proofFile : (SUPABASE_URL ? `${SUPABASE_URL}/storage/v1/object/public/signed-jo-proofs/${proofFile}` : null)
+                                  // Append cache-busting timestamp if available
+                                  const ts = row?.completion_reports?.[0]?.completed_at || row?.completion_reports?.[0]?.updated_at || ''
+                                  const proofUrl = base ? (ts ? `${base}${base.includes('?') ? '&' : '?'}t=${encodeURIComponent(ts)}` : base) : null
+
+                                  return (
+                                    <button
+                                      type="button"
+                                      onClick={() => proofUrl && window.open(proofUrl, '_blank')}
+                                      className="inline-flex items-center justify-center rounded-xl px-3 py-2 text-xs font-semibold border border-gray-200 bg-white text-black hover:bg-gray-50"
+                                    >
+                                      View Proof
+                                    </button>
+                                  )
+                                })()}
+
                                 <TableButton href={`/jo/${row.id}/pdf`} target="_blank" rel="noreferrer" tone="default">
                                   Print PDF
                                 </TableButton>
