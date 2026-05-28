@@ -20,7 +20,6 @@ const TECHNICIAN_STATUS_OPTIONS = [
   { value: 'sent', label: 'Sent' },
   { value: 'processing', label: 'Processing' },
   { value: 'for_approval', label: 'For Approval' },
-  { value: 'approved', label: 'Approved' },
   { value: 'rejected', label: 'Rejected' },
 ]
 
@@ -117,6 +116,8 @@ export default function JOListPage({
   receiverId = null,
   statusIn = null,
   showStatusFilter = true,
+  lockedStatus = null,
+  filterLayout = 'default',
   emptyTitle = 'No job orders found.',
   emptyDescription = 'Created Job Orders will appear here.',
 }) {
@@ -244,7 +245,7 @@ export default function JOListPage({
         params.set('limit', String(limit))
 
         const effectiveReceiverId = receiverId || (isTechnicianView ? user?.id : null)
-        const effectiveStatusIn = statusIn || (isTechnicianView ? 'sent,processing,for_approval,approved,rejected' : 'draft,sent,processing,rejected')
+        const effectiveStatusIn = statusIn || (isTechnicianView ? 'sent,processing,for_approval,rejected' : 'draft,sent,processing,rejected')
 
         if (effectiveReceiverId) params.set('receiver_id', effectiveReceiverId)
         if (effectiveStatusIn) params.set('status_in', effectiveStatusIn)
@@ -821,71 +822,213 @@ export default function JOListPage({
           {description ? <p className="text-sm text-gray-600">{description}</p> : null}
 
           <div className="rounded-[24px] border border-gray-200 bg-white p-5 shadow-sm">
-            <div className="flex flex-col gap-4 lg:flex-row">
-              <label className="block lg:flex-[2]">
-                <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Search JO No. / Location</span>
-                <input
-                  value={searchInput}
-                  onChange={(e) => setSearchInput(e.target.value)}
-                  placeholder="Search by JO No. or Location..."
-                  className="w-full rounded-2xl border-[1.5px] border-[#cbd5e1] bg-[#f8fafc] px-4 py-3 text-sm outline-none placeholder:text-gray-400 focus:border-black"
-                />
-              </label>
-
-              <div className={`grid gap-3 lg:flex-[2] ${showStatusFilter ? 'lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]' : 'lg:grid-cols-[minmax(0,2fr)]'}`}>
-                <div className="grid grid-cols-2 gap-3">
+            {filterLayout === 'approved' ? (
+              <>
+                <div className="grid gap-3">
                   <label className="block">
-                    <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Date From</span>
+                    <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Search JO No. / Location</span>
                     <input
-                      type="date"
-                      value={dateFromInput}
-                      onChange={(e) => setDateFromInput(e.target.value)}
+                      value={searchInput}
+                      onChange={(e) => setSearchInput(e.target.value)}
+                      placeholder="Search by JO No. or Location..."
                       className="w-full rounded-2xl border-[1.5px] border-[#cbd5e1] bg-[#f8fafc] px-4 py-3 text-sm outline-none placeholder:text-gray-400 focus:border-black"
                     />
                   </label>
 
-                  <label className="block">
-                    <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Date To</span>
-                    <input
-                      type="date"
-                      value={dateToInput}
-                      onChange={(e) => setDateToInput(e.target.value)}
-                      className="w-full rounded-2xl border-[1.5px] border-[#cbd5e1] bg-[#f8fafc] px-4 py-3 text-sm outline-none focus:border-black"
-                    />
-                  </label>
+                  <div className="grid gap-3 md:grid-cols-3">
+                    <label className="block">
+                      <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Date From</span>
+                      <input
+                        type="date"
+                        value={dateFromInput}
+                        onChange={(e) => setDateFromInput(e.target.value)}
+                        className="w-full rounded-2xl border-[1.5px] border-[#cbd5e1] bg-[#f8fafc] px-4 py-3 text-sm outline-none placeholder:text-gray-400 focus:border-black"
+                      />
+                    </label>
+
+                    <label className="block">
+                      <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Date To</span>
+                      <input
+                        type="date"
+                        value={dateToInput}
+                        onChange={(e) => setDateToInput(e.target.value)}
+                        className="w-full rounded-2xl border-[1.5px] border-[#cbd5e1] bg-[#f8fafc] px-4 py-3 text-sm outline-none focus:border-black"
+                      />
+                    </label>
+
+                    <div className="block">
+                      <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Status</span>
+                      <div className="flex h-[50px] items-center rounded-2xl border border-gray-200 bg-gray-50 px-4 text-sm font-semibold text-emerald-700">
+                        Approved
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
-                {showStatusFilter ? (
-                  <label className="block lg:flex-[1]">
-                    <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Status</span>
-                    <select
-                      value={statusFilter}
-                      onChange={(e) => setStatusFilter(e.target.value)}
-                      className="w-full rounded-2xl border-[1.5px] border-[#cbd5e1] bg-[#f8fafc] px-4 py-3 text-sm outline-none focus:border-black"
-                    >
-                      {statusOptions.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
+                <div className="mt-4 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
+                  <button
+                    type="button"
+                    onClick={clearFilters}
+                    className="rounded-2xl border border-gray-200 px-4 py-2 text-sm font-semibold text-black transition hover:bg-gray-50"
+                  >
+                    Clear Filters
+                  </button>
+                  <div className="whitespace-nowrap text-sm text-gray-500">
+                    Showing {startRow}-{endRow} of {total}
+                  </div>
+                </div>
+              </>
+            ) : filterLayout === 'technician' ? (
+              <>
+                <div className="grid gap-3">
+                  <label className="block">
+                    <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Search JO No. / Location</span>
+                    <input
+                      value={searchInput}
+                      onChange={(e) => setSearchInput(e.target.value)}
+                      placeholder="Search by JO No. or Location..."
+                      className="w-full rounded-2xl border-[1.5px] border-[#cbd5e1] bg-[#f8fafc] px-4 py-3 text-sm outline-none placeholder:text-gray-400 focus:border-black"
+                    />
                   </label>
-                ) : null}
-              </div>
-            </div>
 
-            <div className="mt-4 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
-              <button
-                type="button"
-                onClick={clearFilters}
-                className="rounded-2xl border border-gray-200 px-4 py-2 text-sm font-semibold text-black transition hover:bg-gray-50"
-              >
-                Clear Filters
-              </button>
-              <div className="whitespace-nowrap text-sm text-gray-500">
-                Showing {startRow}-{endRow} of {total}
-              </div>
-            </div>
+                  <div className="grid gap-3 md:grid-cols-3">
+                    <label className="block">
+                      <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Date From</span>
+                      <input
+                        type="date"
+                        value={dateFromInput}
+                        onChange={(e) => setDateFromInput(e.target.value)}
+                        className="w-full rounded-2xl border-[1.5px] border-[#cbd5e1] bg-[#f8fafc] px-4 py-3 text-sm outline-none placeholder:text-gray-400 focus:border-black"
+                      />
+                    </label>
+
+                    <label className="block">
+                      <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Date To</span>
+                      <input
+                        type="date"
+                        value={dateToInput}
+                        onChange={(e) => setDateToInput(e.target.value)}
+                        className="w-full rounded-2xl border-[1.5px] border-[#cbd5e1] bg-[#f8fafc] px-4 py-3 text-sm outline-none focus:border-black"
+                      />
+                    </label>
+
+                    {showStatusFilter ? (
+                      <label className="block">
+                        <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Status</span>
+                        <select
+                          value={statusFilter}
+                          onChange={(e) => setStatusFilter(e.target.value)}
+                          className="w-full rounded-2xl border-[1.5px] border-[#cbd5e1] bg-[#f8fafc] px-4 py-3 text-sm outline-none focus:border-black"
+                        >
+                          {statusOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    ) : lockedStatus ? (
+                      <div className="block">
+                        <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Status</span>
+                        <div className="flex h-[50px] items-center rounded-2xl border border-gray-200 bg-gray-50 px-4 text-sm font-semibold text-emerald-700">
+                          Approved
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div className="mt-4 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
+                  <button
+                    type="button"
+                    onClick={clearFilters}
+                    className="rounded-2xl border border-gray-200 px-4 py-2 text-sm font-semibold text-black transition hover:bg-gray-50"
+                  >
+                    Clear Filters
+                  </button>
+                  <div className="whitespace-nowrap text-sm text-gray-500">
+                    Showing {startRow}-{endRow} of {total}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex flex-col gap-4 lg:flex-row">
+                  <label className="block lg:flex-[2]">
+                    <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Search JO No. / Location</span>
+                    <input
+                      value={searchInput}
+                      onChange={(e) => setSearchInput(e.target.value)}
+                      placeholder="Search by JO No. or Location..."
+                      className="w-full rounded-2xl border-[1.5px] border-[#cbd5e1] bg-[#f8fafc] px-4 py-3 text-sm outline-none placeholder:text-gray-400 focus:border-black"
+                    />
+                  </label>
+
+                  <div
+                    className={`grid gap-3 lg:flex-[2] ${showStatusFilter || lockedStatus ? 'lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]' : 'lg:grid-cols-[minmax(0,2fr)]'}`}
+                  >
+                    <div className="grid grid-cols-2 gap-3">
+                      <label className="block">
+                        <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Date From</span>
+                        <input
+                          type="date"
+                          value={dateFromInput}
+                          onChange={(e) => setDateFromInput(e.target.value)}
+                          className="w-full rounded-2xl border-[1.5px] border-[#cbd5e1] bg-[#f8fafc] px-4 py-3 text-sm outline-none placeholder:text-gray-400 focus:border-black"
+                        />
+                      </label>
+
+                      <label className="block">
+                        <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Date To</span>
+                        <input
+                          type="date"
+                          value={dateToInput}
+                          onChange={(e) => setDateToInput(e.target.value)}
+                          className="w-full rounded-2xl border-[1.5px] border-[#cbd5e1] bg-[#f8fafc] px-4 py-3 text-sm outline-none focus:border-black"
+                        />
+                      </label>
+                    </div>
+
+                    {showStatusFilter ? (
+                      <label className="block lg:flex-[1]">
+                        <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Status</span>
+                        <select
+                          value={statusFilter}
+                          onChange={(e) => setStatusFilter(e.target.value)}
+                          className="w-full rounded-2xl border-[1.5px] border-[#cbd5e1] bg-[#f8fafc] px-4 py-3 text-sm outline-none focus:border-black"
+                        >
+                          {statusOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    ) : lockedStatus ? (
+                      <div className="block lg:flex-[1]">
+                        <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Status</span>
+                        <div className="flex h-[50px] items-center rounded-2xl border border-gray-200 bg-gray-50 px-4 text-sm font-semibold text-emerald-700">
+                          Approved
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div className="mt-4 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
+                  <button
+                    type="button"
+                    onClick={clearFilters}
+                    className="rounded-2xl border border-gray-200 px-4 py-2 text-sm font-semibold text-black transition hover:bg-gray-50"
+                  >
+                    Clear Filters
+                  </button>
+                  <div className="whitespace-nowrap text-sm text-gray-500">
+                    Showing {startRow}-{endRow} of {total}
+                  </div>
+                </div>
+              </>
+            )}
           </div>
 
           <div className="rounded-[24px] border border-gray-200 bg-white p-5 shadow-sm">
@@ -902,9 +1045,9 @@ export default function JOListPage({
                       {isTechnicianView ? (
                         <colgroup>
                           <col className="w-[15%]" />
-                          <col className="w-[10%]" />
-                          <col className="w-[11%]" />
-                          <col className="w-[12%]" />
+                          <col className="w-[25%]" />
+                          <col className="w-[15%]" />
+                          <col className="w-[15%]" />
                           <col className="w-[40%]" />
                         </colgroup>
                       ) : (
@@ -920,9 +1063,9 @@ export default function JOListPage({
                         <tr>
                           <th className="px-4 py-3">JO No.</th>
                           <th className="px-4 py-3">Location</th>
-                          <th className="px-4 py-3">Date</th>
+                          <th className="px-4 py-3 hidden md:table-cell">Date</th>
                           <th className="px-4 py-3">Status</th>
-                          <th className="px-4 py-3">Actions</th>
+                          <th className="px-4 py-3 hidden md:table-cell">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -934,12 +1077,12 @@ export default function JOListPage({
                           return (
                             <tr key={row.id} className="border-t border-gray-100 align-top">
                               <td className="px-4 py-4 font-medium text-black">{isDraft ? '—' : row.jo_number || '—'}</td>
-                              <td className="px-4 py-4 text-gray-700 whitespace-nowrap">{row.location || '—'}</td>
-                              <td className="px-4 py-4 text-gray-700">{formatDate(row.date)}</td>
+                              <td className="px-4 py-4 text-gray-700 overflow-hidden text-ellipsis whitespace-nowrap">{row.location || '—'}</td>
+                              <td className="px-4 py-4 text-gray-700 hidden md:table-cell">{formatDate(row.date)}</td>
                               <td className="px-4 py-4 text-gray-700">
                                 <JOStatusBadge status={row.status} technicianView={isTechnicianView} />
                               </td>
-                              <td className="px-4 py-4">
+                              <td className="px-4 py-4 hidden md:table-cell">
                                 {isTechnicianView ? (
                                   technicianActions
                                 ) : (
@@ -957,7 +1100,7 @@ export default function JOListPage({
                                           disabled={actionLoadingId === row.id}
                                           onClick={() => handleSendDraftNow(row)}
                                         >
-                                          Send Now
+                                          Send Now    
                                         </TableButton>
                                       </>
                                     ) : (

@@ -44,6 +44,16 @@ function JobOrdersIcon() {
   )
 }
 
+function ApprovedIcon() {
+  return (
+    <IconWrapper>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-5 w-5">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 12l4 4L19 6" />
+      </svg>
+    </IconWrapper>
+  )
+}
+
 function ApprovalIcon() {
   return (
     <IconWrapper>
@@ -79,6 +89,7 @@ const iconByHref = {
   '/dashboard': DashboardIcon,
   '/jo/create': CreateIcon,
   '/jo': JobOrdersIcon,
+  '/jo/approved': ApprovedIcon,
   '/jo/approval': ApprovalIcon,
   '/jo/archive': ArchiveIcon,
   '/logs': LogsIcon,
@@ -93,6 +104,7 @@ export default function Sidebar({ hidden = false, setHidden = () => {}, mobileOp
       { href: '/dashboard', label: 'Dashboard', roles: ['admin', 'technician'] },
       { href: '/jo/create', label: 'Create JO', roles: ['admin'] },
       { href: '/jo', label: 'Job Orders', roles: ['admin', 'technician'] },
+      { href: '/jo/approved', label: 'Approved', roles: ['technician'] },
       { href: '/jo/approval', label: 'Approval Queue', roles: ['admin'] },
       { href: '/jo/archive', label: 'Archive', roles: ['admin'] },
       { href: '/logs', label: 'Activity Logs', roles: ['admin'] },
@@ -106,7 +118,7 @@ export default function Sidebar({ hidden = false, setHidden = () => {}, mobileOp
     <>
       {/* Desktop / persistent sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-30 hidden h-screen flex-col bg-[#CC0000] text-white shadow-2xl transition-all duration-300 md:flex md:overflow-y-auto md:overscroll-contain ${hidden ? 'w-0 overflow-hidden' : 'w-72'}`}
+        className={`fixed inset-y-0 left-0 z-30 hidden h-screen flex-col bg-[#CC0000] text-white shadow-2xl transition-all duration-300 lg:flex lg:overflow-y-auto lg:overscroll-contain ${hidden ? 'w-0 overflow-hidden' : 'w-72'}`}
         aria-hidden={hidden}
       >
         <div className={`relative border-b border-white/15 ${hidden ? 'px-2 py-4' : 'px-6 py-6'}`}>
@@ -149,12 +161,12 @@ export default function Sidebar({ hidden = false, setHidden = () => {}, mobileOp
         </nav>
 
         <div className={`border-t border-white/15 ${hidden ? 'px-0 py-3 text-center' : 'px-6 py-5 text-xs'}`}>
-          {!hidden ? 'Government workflow view' : null}
+          {!hidden ? 'Governmen View' : null}
         </div>
       </aside>
 
       {/* Mobile slide-over sidebar */}
-      <div className={`md:hidden ${mobileOpen ? 'fixed inset-0 z-40' : 'hidden'}`} aria-hidden={!mobileOpen}>
+      <div className={`lg:hidden ${mobileOpen ? 'fixed inset-0 z-40' : 'hidden'}`} aria-hidden={!mobileOpen}>
         <div className="fixed inset-0 bg-black/50" onClick={() => setMobileOpen(false)} />
         <div className={`fixed left-0 top-0 bottom-0 z-50 w-72 transform bg-[#CC0000] text-white shadow-2xl transition-transform duration-300 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}>
           <div className="border-b border-white/15 px-6 py-6">

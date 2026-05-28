@@ -71,7 +71,9 @@ export default function TechnicianDashboard() {
         if (!mounted) return
 
         const list = Array.isArray(payload?.data) ? payload.data : []
-        setRows(list.slice(0, 5))
+        const assignedWorkStatuses = new Set(['sent', 'processing', 'for_approval', 'rejected'])
+        const assignedWorkRows = list.filter((row) => assignedWorkStatuses.has((row.status || '').toLowerCase()))
+        setRows(assignedWorkRows.slice(0, 5))
         setCounts(
           list.reduce(
             (acc, row) => {

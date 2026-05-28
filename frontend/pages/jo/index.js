@@ -14,6 +14,7 @@ export default function JobOrdersPage() {
         title="My Job Orders"
         description="Assigned job orders for the logged-in technician."
         viewMode="technician"
+        filterLayout="technician"
         emptyTitle="No assigned job orders found."
         emptyDescription="Assigned Job Orders will appear here."
       />
