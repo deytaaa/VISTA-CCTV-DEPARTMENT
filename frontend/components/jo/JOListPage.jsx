@@ -101,10 +101,16 @@ function getLatestCompletionReport(row) {
   if (!Array.isArray(row?.completion_reports) || row.completion_reports.length === 0) return null
 
   return [...row.completion_reports].sort((left, right) => {
-    const leftTime = new Date(left?.completed_at || 0).getTime()
-    const rightTime = new Date(right?.completed_at || 0).getTime()
+    const leftTime = new Date(left?.completed_at || left?.updated_at || 0).getTime()
+    const rightTime = new Date(right?.completed_at || right?.updated_at || 0).getTime()
     return rightTime - leftTime
   })[0]
+}
+
+function getCompletionReportTimestamp(report) {
+  if (!report) return 0
+
+  return new Date(report.completed_at || report.updated_at || 0).getTime()
 }
 
 export default function JOListPage({
@@ -467,6 +473,16 @@ export default function JOListPage({
         throw new Error(completionPayload?.error || 'Failed to save completion proof')
       }
 
+      setRows((currentRows) =>
+        currentRows.map((row) =>
+          row.id === proofJobOrder.id
+            ? {
+                ...row,
+                completion_reports: [completionPayload?.data].filter(Boolean),
+              }
+            : row,
+        ),
+      )
       setRefreshTick((value) => value + 1)
       setProofToast({ visible: true, exiting: false })
       closeProofModal()
@@ -480,7 +496,13 @@ export default function JOListPage({
   function renderTechnicianActions(row) {
     const status = (row.status || '').toLowerCase()
     const latestCompletion = getLatestCompletionReport(row)
-    const hasProof = Boolean(latestCompletion?.proof_file)
+    const rejectedAt = new Date(row?.rejected_at || row?.updated_at || 0).getTime()
+    const hasProofAfterRejection = Boolean(
+      latestCompletion &&
+        (latestCompletion.proof_file || latestCompletion.proof_url) &&
+        rejectedAt &&
+        getCompletionReportTimestamp(latestCompletion) > rejectedAt,
+    )
 
     const pdfActions = (
       <>
@@ -508,13 +530,14 @@ export default function JOListPage({
     }
 
     if (status === 'processing') {
-      if (hasProof) {
+      if (latestCompletion?.proof_file || latestCompletion?.proof_url) {
         return (
           <div className="flex min-w-max flex-nowrap items-center gap-2">
             {pdfActions}
             <ProofSavedBadge />
             <TableButton tone="primary" disabled={actionLoadingId === row.id} onClick={() => handleSubmitForApproval(row.id)}>
-              Submit for Approval
+              <span className="lg:hidden">Submit</span>
+              <span className="hidden lg:inline">Submit for Approval</span>
             </TableButton>
           </div>
         )
@@ -531,16 +554,15 @@ export default function JOListPage({
     }
 
     if (status === 'rejected') {
-      if (hasProof) {
+      const rejectedAt = new Date(row?.rejected_at || row?.updated_at || 0).getTime()
+      if (hasProofAfterRejection) {
         return (
           <div className="flex min-w-max flex-nowrap items-center gap-2">
             {pdfActions}
             <ProofSavedBadge />
-            <TableButton tone="primary" disabled={proofLoading || actionLoadingId === row.id} onClick={() => openProofModal(row)}>
-              Re-upload Proof
-            </TableButton>
             <TableButton tone="primary" disabled={actionLoadingId === row.id} onClick={() => handleSubmitForApproval(row.id)}>
-              Submit for Approval
+              <span className="lg:hidden">Submit</span>
+              <span className="hidden lg:inline">Submit for Approval</span>
             </TableButton>
           </div>
         )
@@ -550,7 +572,11 @@ export default function JOListPage({
         <div className="flex min-w-max flex-nowrap items-center gap-2">
           {pdfActions}
           <TableButton tone="primary" disabled={proofLoading || actionLoadingId === row.id} onClick={() => openProofModal(row)}>
-            Re-upload Proof
+              Re-upload Proof
+          </TableButton>
+          <TableButton tone="primary" disabled={actionLoadingId === row.id} onClick={() => handleSubmitForApproval(row.id)}>
+            <span className="lg:hidden">Submit</span>
+            <span className="hidden lg:inline">Submit for Approval</span>
           </TableButton>
         </div>
       )
@@ -1045,10 +1071,10 @@ export default function JOListPage({
                       {isTechnicianView ? (
                         <colgroup>
                           <col className="w-[15%]" />
-                          <col className="w-[25%]" />
-                          <col className="w-[15%]" />
-                          <col className="w-[15%]" />
-                          <col className="w-[40%]" />
+                          <col className="w-[20%]" />
+                          <col className="w-[13%]" />
+                          <col className="w-[16%]" />
+                          <col className="w-[28%]" />
                         </colgroup>
                       ) : (
                         <colgroup>
@@ -1076,7 +1102,7 @@ export default function JOListPage({
                           const technicianActions = isTechnicianView ? renderTechnicianActions(row) : null
                           return (
                             <tr key={row.id} className="border-t border-gray-100 align-top">
-                              <td className="px-4 py-4 font-medium text-black">{isDraft ? '—' : row.jo_number || '—'}</td>
+                              <td className="px-4 py-4 font-medium text-black whitespace-nowrap">{isDraft ? '—' : row.jo_number || '—'}</td>
                               <td className="px-4 py-4 text-gray-700 overflow-hidden text-ellipsis whitespace-nowrap">{row.location || '—'}</td>
                               <td className="px-4 py-4 text-gray-700 hidden md:table-cell">{formatDate(row.date)}</td>
                               <td className="px-4 py-4 text-gray-700">
@@ -1254,7 +1280,7 @@ export default function JOListPage({
                     Cancel
                   </button>
                   <button type="button" onClick={submitProof} disabled={proofLoading} className="rounded-2xl bg-taguigRed px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">
-                    {proofLoading ? 'Uploading...' : (proofJobOrder && (proofJobOrder.status || '').toLowerCase() === 'rejected' ? 'Re-upload and Submit' : 'Save Proof')}
+                    {proofLoading ? 'Uploading...' : (proofJobOrder && (proofJobOrder.status || '').toLowerCase() === 'rejected' ? 'Re-upload' : 'Save Proof')}
                   </button>
                 </div>
               </div>
