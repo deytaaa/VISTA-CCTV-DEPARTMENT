@@ -22,12 +22,19 @@ async function authMiddleware(req, res, next) {
     req.sessionToken = token;
     req.authUser = data.user;
     req.authProfile = profile || null;
-    req.user = profile || {
-      id: data.user.id,
-      email: data.user.email,
-      name: data.user.user_metadata?.name || data.user.email,
-      role: data.user.user_metadata?.role || data.user.app_metadata?.role || null,
-    };
+    const fallbackRole = data.user.user_metadata?.role || data.user.app_metadata?.role || null;
+
+    req.user = profile
+      ? {
+          ...profile,
+          role: profile.role || fallbackRole,
+        }
+      : {
+          id: data.user.id,
+          email: data.user.email,
+          name: data.user.user_metadata?.name || data.user.email,
+          role: fallbackRole,
+        };
 
     return next();
   } catch (err) {

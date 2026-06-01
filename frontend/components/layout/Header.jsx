@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabaseClient'
 
 export default function Header({ title, subtitle, actions = null, mobileOpen = false, setMobileOpen = () => {}, sidebarHidden = false, setSidebarHidden = () => {} }) {
   const { user, role } = useAuth()
+  const effectiveRole = role || user?.app_metadata?.role || user?.user_metadata?.role || null
 
   async function handleSignOut() {
     try {
@@ -63,7 +64,7 @@ export default function Header({ title, subtitle, actions = null, mobileOpen = f
         <div className="flex flex-wrap-none items-center gap-1 sm:gap-3 lg:ml-auto">
           <div className="hidden text-right lg:block">
             <p className="text-sm font-semibold text-black">{user?.email || 'User'}</p>
-            <p className="text-xs uppercase tracking-[0.25em] text-gray-500">{role || 'No role'}</p>
+            <p className="text-xs uppercase tracking-[0.25em] text-gray-500">{effectiveRole || 'No role'}</p>
           </div>
 
           <div className="flex items-center gap-1 sm:gap-2">

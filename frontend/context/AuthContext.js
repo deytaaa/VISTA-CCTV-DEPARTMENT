@@ -4,6 +4,37 @@ import { supabase } from '../lib/supabaseClient'
 const AuthContext = createContext(null)
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || ''
 
+function buildFallbackProfile(nextSession, payload = {}) {
+  const sessionUser = nextSession?.user || null
+  const authUser = payload?.authUser || null
+  const mergedUser = payload?.user || null
+
+  const role =
+    mergedUser?.role ||
+    payload?.profile?.role ||
+    authUser?.app_metadata?.role ||
+    authUser?.user_metadata?.role ||
+    sessionUser?.app_metadata?.role ||
+    sessionUser?.user_metadata?.role ||
+    null
+
+  return {
+    ...(payload?.profile || {}),
+    ...(mergedUser || {}),
+    id: mergedUser?.id || payload?.profile?.id || authUser?.id || sessionUser?.id || null,
+    email: mergedUser?.email || payload?.profile?.email || authUser?.email || sessionUser?.email || null,
+    name:
+      mergedUser?.name ||
+      payload?.profile?.name ||
+      sessionUser?.user_metadata?.name ||
+      authUser?.user_metadata?.name ||
+      authUser?.email ||
+      sessionUser?.email ||
+      null,
+    role,
+  }
+}
+
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
   const [profile, setProfile] = useState(null)
@@ -26,17 +57,23 @@ export function AuthProvider({ children }) {
         },
       })
 
+      let payload = null
+      try {
+        payload = await response.json()
+      } catch (parseError) {
+        payload = null
+      }
+
       if (!response.ok) {
-        setProfile(null)
+        setProfile(buildFallbackProfile(nextSession, payload))
         setLoading(false)
         return
       }
 
-      const data = await response.json()
-      setProfile(data?.profile ?? null)
+      setProfile(buildFallbackProfile(nextSession, payload))
     } catch (error) {
       console.error('Failed to sync backend session', error)
-      setProfile(null)
+      setProfile(buildFallbackProfile(nextSession))
     } finally {
       setLoading(false)
     }
@@ -82,7 +119,7 @@ export function AuthProvider({ children }) {
       session,
       user: session?.user ?? null,
       profile,
-      role: profile?.role ?? null,
+      role: profile?.role ?? session?.user?.app_metadata?.role ?? session?.user?.user_metadata?.role ?? null,
       loading,
       isAuthenticated: Boolean(session),
     }),

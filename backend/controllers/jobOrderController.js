@@ -1,4 +1,5 @@
 const supabase = require('../lib/supabase');
+const { previewInventoryUsage, deductInventoryForJobOrder } = require('../lib/inventory');
 
 function normalizeRpcJoNumber(rpcResult) {
   if (!rpcResult) return null;
@@ -180,6 +181,16 @@ module.exports = {
         return res.status(500).json({ error: 'Failed to generate JO number' });
       }
 
+      if (status === 'sent' && Array.isArray(payload.items) && payload.items.length > 0) {
+        const { shortages } = await previewInventoryUsage(payload.items);
+        if (shortages.length > 0 && !payload.allow_insufficient_stock) {
+          const message = shortages
+            .map((item) => `${item.item_name} only has ${item.available} ${item.unit} in stock but JO requires ${item.required}.`)
+            .join(' ');
+          return res.status(409).json({ error: message, shortages });
+        }
+      }
+
       const insertObj = {
         jo_number: joNumber,
         date: payload.date || new Date().toISOString().slice(0, 10),
@@ -220,6 +231,21 @@ module.exports = {
       }
 
       if (status === 'sent') {
+        try {
+          if (Array.isArray(payload.items) && payload.items.length > 0) {
+            await deductInventoryForJobOrder({
+              items: payload.items,
+              jobOrderId,
+              joNumber: created.jo_number,
+              performedBy: req.user?.id || null,
+              allowInsufficientStock: Boolean(payload.allow_insufficient_stock),
+            });
+          }
+        } catch (inventoryError) {
+          await supabase.from('job_orders').delete().eq('id', jobOrderId);
+          return res.status(409).json({ error: inventoryError.message || 'Failed to deduct inventory', shortages: inventoryError.shortages || [] });
+        }
+
         await notifyTechnicianForSentJobOrder({
           jobOrderId,
           joNumber: created.jo_number,
@@ -246,6 +272,16 @@ module.exports = {
 
       if (currentError || !current) {
         return res.status(404).json({ error: currentError?.message || 'Job order not found' });
+      }
+
+      if (payload.status === 'sent' && current.status !== 'sent' && Array.isArray(payload.items) && payload.items.length > 0) {
+        const { shortages } = await previewInventoryUsage(payload.items);
+        if (shortages.length > 0 && !payload.allow_insufficient_stock) {
+          const message = shortages
+            .map((item) => `${item.item_name} only has ${item.available} ${item.unit} in stock but JO requires ${item.required}.`)
+            .join(' ');
+          return res.status(409).json({ error: message, shortages });
+        }
       }
 
       const { data, error } = await supabase
@@ -292,6 +328,21 @@ module.exports = {
           }));
           const { error: personnelError } = await supabase.from('job_order_personnel').insert(personnelToInsert);
           if (personnelError) return res.status(500).json({ error: personnelError.message || personnelError });
+        }
+      }
+
+      if (payload.status === 'sent' && current.status !== 'sent' && Array.isArray(payload.items) && payload.items.length > 0) {
+        try {
+          await deductInventoryForJobOrder({
+            items: payload.items,
+            jobOrderId: id,
+            joNumber: data?.jo_number || payload.jo_number || current.jo_number || null,
+            performedBy: req.user?.id || null,
+            allowInsufficientStock: Boolean(payload.allow_insufficient_stock),
+          });
+        } catch (inventoryError) {
+          await supabase.from('job_orders').update({ status: current.status, updated_at: new Date().toISOString() }).eq('id', id);
+          return res.status(409).json({ error: inventoryError.message || 'Failed to deduct inventory', shortages: inventoryError.shortages || [] });
         }
       }
 

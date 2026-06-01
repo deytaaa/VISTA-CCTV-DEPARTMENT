@@ -3,11 +3,15 @@ import { useRouter } from 'next/router'
 import { pdf } from '@react-pdf/renderer'
 import { supabase } from '../../../lib/supabaseClient'
 import JODocument from '../../../components/pdf/JODocument'
+import ProtectedRoute from '../../../components/ProtectedRoute'
+import { useAuth } from '../../../context/AuthContext'
 
 export default function PDFDownloadPage() {
   const router = useRouter()
   const { id } = router.query
   const [status, setStatus] = useState('Loading...')
+  const { loading, role } = useAuth()
+
 
   useEffect(() => {
     if (!id) return
@@ -54,17 +58,24 @@ export default function PDFDownloadPage() {
     generateAndDownload()
   }, [id])
 
+  if (loading) {
+    return <div className="flex min-h-screen items-center justify-center bg-white text-sm text-gray-500">Checking session...</div>
+  }
+
   return (
-    <div
-      style={{
-        padding: 40,
-        fontFamily: 'sans-serif',
-        textAlign: 'center',
-        marginTop: 100,
-      }}
-    >
-      <h2>JO PDF Download</h2>
-      <p>{status}</p>
-    </div>
+    <ProtectedRoute allowedRoles={['admin', 'technician']}>
+      <div
+        style={{
+          padding: 40,
+          fontFamily: 'sans-serif',
+          textAlign: 'center',
+          marginTop: 100,
+        }}
+      >
+        <h2>JO PDF Download</h2>
+        <p>{status}</p>
+      </div>
+    </ProtectedRoute>
   )
+
 }

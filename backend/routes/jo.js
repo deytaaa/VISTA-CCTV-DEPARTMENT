@@ -5,6 +5,11 @@ const multer = require('multer');
 const supabase = require('../lib/supabase');
 const { authMiddleware } = require('../middleware/auth');
 const { requireAnyRole } = require('../middleware/roleMiddleware');
+
+function disallowInventory(req, res, next) {
+  if (req.user?.role === 'inventory') return res.status(403).json({ error: 'Forbidden' });
+  return next();
+}
 const router = express.Router();
 
 const SEQ_FILE = path.join(__dirname, '..', 'jo-sequence.json');
@@ -75,7 +80,7 @@ function generateJoNumberFileBacked() {
   return `JO-${data.year}-${seq}`;
 }
 
-router.post('/generate', async (req, res) => {
+router.post('/generate', authMiddleware, disallowInventory, async (req, res) => {
   try {
     const rpcResult = await generateJoNumberViaRpc();
     const rpcJoNumber = normalizeRpcJoNumber(rpcResult);
@@ -90,7 +95,7 @@ router.post('/generate', async (req, res) => {
   }
 });
 
-router.get('/next-number', async (req, res) => {
+router.get('/next-number', authMiddleware, disallowInventory, async (req, res) => {
   try {
     const year = new Date().getFullYear();
     const { data, error } = await supabase
@@ -113,7 +118,7 @@ router.get('/next-number', async (req, res) => {
   }
 });
 
-router.post('/upload-proof', authMiddleware, requireAnyRole(['admin', 'technician']), upload.single('file'), async (req, res) => {
+router.post('/upload-proof', authMiddleware, disallowInventory, requireAnyRole(['admin', 'technician']), upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   // Validate MIME types
   const allowed = ['image/jpeg', 'image/png', 'application/pdf'];

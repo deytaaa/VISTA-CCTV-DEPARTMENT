@@ -53,7 +53,7 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || ''
 
 export default function AdminDashboard() {
   const { user, role } = useAuth()
-  const canCreateJo = role === 'admin' || role === 'dispatcher'
+
   const [rows, setRows] = useState([])
   const [counts, setCounts] = useState({})
   const [loading, setLoading] = useState(true)
@@ -100,9 +100,15 @@ export default function AdminDashboard() {
         // eslint-disable-next-line no-console
         console.debug('AdminDashboard: /api/logs', logsResponse.status, logsPayload)
 
+        if (jobOrdersResponse.status === 401 || logsResponse.status === 401) {
+          if (typeof window !== 'undefined') window.location.href = '/login'
+          return
+        }
+
         if (!jobOrdersResponse.ok) {
           throw new Error(jobOrdersPayload?.error || 'Failed to load dashboard data')
         }
+
 
         if (!mounted) return
 

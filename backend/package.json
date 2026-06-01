@@ -6,6 +6,7 @@
     "start": "node server.js",
     "dev": "nodemon server.js",
     "seed-admin": "node scripts/seed-admin.js",
+    "seed:inventory": "node scripts/seed-inventory.js",
     "seed-technician.js": "node scripts/seed-technician.js"
   },
   "dependencies": {

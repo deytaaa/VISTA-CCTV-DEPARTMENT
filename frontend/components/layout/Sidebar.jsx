@@ -97,22 +97,24 @@ const iconByHref = {
 
 export default function Sidebar({ hidden = false, setHidden = () => {}, mobileOpen = false, setMobileOpen = () => {} }) {
   const router = useRouter()
-  const { role } = useAuth()
+  const { role, user, profile } = useAuth()
+  const effectiveRole = role || profile?.role || user?.app_metadata?.role || user?.user_metadata?.role || ''
 
   const items = useMemo(
     () => [
-      { href: '/dashboard', label: 'Dashboard', roles: ['admin', 'technician'] },
+      { href: '/dashboard', label: 'Dashboard', roles: ['admin', 'technician', 'inventory'] },
       { href: '/jo/create', label: 'Create JO', roles: ['admin'] },
       { href: '/jo', label: 'Job Orders', roles: ['admin', 'technician'] },
       { href: '/jo/approved', label: 'Approved', roles: ['technician'] },
       { href: '/jo/approval', label: 'Approval Queue', roles: ['admin'] },
       { href: '/jo/archive', label: 'Archive', roles: ['admin'] },
       { href: '/logs', label: 'Activity Logs', roles: ['admin'] },
+      { href: '/inventory', label: 'Inventory', roles: ['inventory'] },
     ],
     []
   )
 
-  const visibleItems = items.filter((item) => item.roles.includes(role || ''))
+  const visibleItems = items.filter((item) => item.roles.includes(effectiveRole))
 
   return (
     <>

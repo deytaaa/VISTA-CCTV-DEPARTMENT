@@ -6,15 +6,21 @@ import { useAuth } from '../context/AuthContext'
 
 function mapItemRows(rows) {
   if (!Array.isArray(rows) || rows.length === 0) {
-    return [{ item_no: 1, item_name: '', reference_no: '', quantity: '' }]
+    return [{ item_no: 1, item_name: '', inventory_item_id: '', unit: '', reference_no: '', quantity: '' }]
   }
 
   return rows.map((row, index) => ({
     item_no: row?.item_no || index + 1,
     item_name: row?.item_name || '',
+    inventory_item_id: row?.inventory_item_id || '',
+    unit: row?.unit || '',
     reference_no: row?.reference_no || '',
     quantity: row?.quantity || '',
   }))
+}
+
+function createEmptyItemRow(itemNo) {
+  return { item_no: itemNo, item_name: '', inventory_item_id: '', unit: '', reference_no: '', quantity: '' }
 }
 
 function mapPersonnelRows(rows) {
@@ -34,6 +40,21 @@ function getTodayValue() {
   return new Date(now.getTime() - offset).toISOString().slice(0, 10)
 }
 
+async function previewInventoryUsage(items, headers) {
+  const base = process.env.NEXT_PUBLIC_API_URL || ''
+  const response = await fetch(`${base}/api/inventory/preview-usage`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...headers,
+    },
+    body: JSON.stringify({ items }),
+  })
+
+  const payload = await response.json()
+  return { ok: response.ok, payload }
+}
+
 export default function CreateJO() {
   const router = useRouter()
   const { session, user } = useAuth()
@@ -41,9 +62,11 @@ export default function CreateJO() {
   const [joNumber, setJoNumber] = useState('')
   const [date, setDate] = useState('')
   const [location, setLocation] = useState('')
-  const [items, setItems] = useState([{ item_no: 1, item_name: '', reference_no: '', quantity: '' }])
+  const [items, setItems] = useState([createEmptyItemRow(1)])
   const [personnel, setPersonnel] = useState([{ personnel_no: 1, name: '' }])
   const [technicians, setTechnicians] = useState([])
+  const [inventoryItems, setInventoryItems] = useState([])
+  const [inventoryLoading, setInventoryLoading] = useState(true)
   const [selectedTechnicianId, setSelectedTechnicianId] = useState('')
   const [techniciansLoading, setTechniciansLoading] = useState(true)
   const [loading, setLoading] = useState(false)
@@ -56,9 +79,24 @@ export default function CreateJO() {
 
   async function loadNextJoNumber() {
     try {
+      // If the session is missing/expired, redirect gracefully.
+      if (!session?.access_token) {
+        router.replace(`/login?next=${encodeURIComponent(router.asPath)}`)
+        return
+      }
+
       const base = process.env.NEXT_PUBLIC_API_URL || ''
-      const res = await fetch(`${base}/api/jo/next-number`)
-      const payload = await res.json()
+      const res = await fetch(`${base}/api/jo/next-number`, {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      })
+      const payload = await res.json().catch(() => ({}))
+
+      if (res.status === 401) {
+        router.replace(`/login?next=${encodeURIComponent(router.asPath)}`)
+        return
+      }
 
       if (!res.ok) {
         throw new Error(payload?.error || 'Failed to load next JO number')
@@ -66,9 +104,15 @@ export default function CreateJO() {
 
       setJoNumber(payload?.jo_number || '')
     } catch (fetchError) {
+      // Avoid abort/unhandled errors when auth expires.
+      if (fetchError?.message?.toLowerCase?.().includes('401')) {
+        router.replace(`/login?next=${encodeURIComponent(router.asPath)}`)
+        return
+      }
       setJoNumber('')
     }
   }
+
 
   useEffect(() => {
     if (!router.isReady) return
@@ -131,6 +175,39 @@ export default function CreateJO() {
   useEffect(() => {
     let active = true
 
+    async function loadInventoryItems() {
+      try {
+        if (!session?.access_token) return
+
+        setInventoryLoading(true)
+
+        const base = process.env.NEXT_PUBLIC_API_URL || ''
+        const res = await fetch(`${base}/api/inventory/items?limit=1000`, {
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        })
+
+        const payload = await res.json()
+
+        if (!res.ok) {
+          throw new Error(payload?.error || 'Failed to load inventory items')
+        }
+
+        if (!active) return
+
+        setInventoryItems(Array.isArray(payload?.data) ? payload.data : [])
+      } catch (fetchError) {
+        if (active) {
+          setError(fetchError.message)
+        }
+      } finally {
+        if (active) setInventoryLoading(false)
+      }
+    }
+
+    loadInventoryItems()
+
     async function loadTechnicians() {
       try {
         if (!session?.access_token) return
@@ -170,13 +247,73 @@ export default function CreateJO() {
     }
   }, [session?.access_token])
 
-  const addItem = () => setItems([...items, { item_no: items.length + 1, item_name: '', reference_no: '', quantity: '' }])
+  useEffect(() => {
+    if (!inventoryItems.length || !items.length) return
+
+    setItems((current) => {
+      let changed = false
+
+      const nextRows = current.map((item) => {
+        if (item.inventory_item_id) return item
+
+        const matchedItem = inventoryItems.find((inventoryItem) => inventoryItem.item_name === item.item_name)
+        if (!matchedItem) return item
+
+        changed = true
+        return {
+          ...item,
+          inventory_item_id: matchedItem.id,
+          item_name: matchedItem.item_name,
+          unit: matchedItem.unit || '',
+        }
+      })
+
+      return changed ? nextRows : current
+    })
+  }, [inventoryItems, items])
+
+  const addItem = () => setItems([...items, createEmptyItemRow(items.length + 1)])
   const removeItem = (i) => setItems(items.filter((_, idx) => idx !== i))
   const addPerson = () => setPersonnel([...personnel, { personnel_no: personnel.length + 1, name: '' }])
   const removePerson = (i) => setPersonnel(personnel.filter((_, idx) => idx !== i))
 
+  function getInventoryItemByRow(item) {
+    if (!item) return null
+    if (item.inventory_item_id) {
+      return inventoryItems.find((inventoryItem) => String(inventoryItem.id) === String(item.inventory_item_id)) || null
+    }
+
+    return inventoryItems.find((inventoryItem) => inventoryItem.item_name === item.item_name) || null
+  }
+
   function updateItem(index, field, value) {
     setItems((current) => current.map((item, itemIndex) => (itemIndex === index ? { ...item, [field]: value } : item)))
+  }
+
+  function updateItemSelection(index, selectedValue) {
+    const selectedInventoryItem = inventoryItems.find((inventoryItem) => String(inventoryItem.id) === String(selectedValue)) || null
+
+    setItems((current) =>
+      current.map((item, itemIndex) => {
+        if (itemIndex !== index) return item
+
+        if (!selectedInventoryItem) {
+          return {
+            ...item,
+            inventory_item_id: '',
+            item_name: selectedValue,
+            unit: '',
+          }
+        }
+
+        return {
+          ...item,
+          inventory_item_id: selectedInventoryItem.id,
+          item_name: selectedInventoryItem.item_name,
+          unit: selectedInventoryItem.unit || '',
+        }
+      })
+    )
   }
 
   function updatePerson(index, value) {
@@ -188,7 +325,7 @@ export default function CreateJO() {
     setJoNumber('')
     setDate(getTodayValue())
     setLocation('')
-    setItems([{ item_no: 1, item_name: '', reference_no: '', quantity: '' }])
+    setItems([createEmptyItemRow(1)])
     setPersonnel([{ personnel_no: 1, name: '' }])
     setSelectedTechnicianId('')
   }
@@ -322,6 +459,24 @@ export default function CreateJO() {
         headers.Authorization = `Bearer ${session.access_token}`
       }
 
+      let allowInsufficientStock = false
+
+      if (status === 'sent' && items.length > 0) {
+        const preview = await previewInventoryUsage(items, headers)
+        const shortages = Array.isArray(preview?.payload?.data?.shortages) ? preview.payload.data.shortages : []
+
+        if (shortages.length > 0) {
+          const message = shortages.map((item) => `${item.item_name} only has ${item.available} ${item.unit} in stock but JO requires ${item.required}.`).join('\n')
+          const proceed = window.confirm(`${message}\n\nProceed anyway?`)
+          if (!proceed) {
+            setLoading(false)
+            return
+          }
+
+          allowInsufficientStock = true
+        }
+      }
+
       let joNumberForSubmit = null
       const isEditingDraft = Boolean(draftId)
 
@@ -352,6 +507,7 @@ export default function CreateJO() {
             status,
             sender_id: user?.id || null,
             receiver_id: selectedTechnicianId || null,
+            allow_insufficient_stock: allowInsufficientStock,
           }),
         })
       } else {
@@ -367,6 +523,7 @@ export default function CreateJO() {
             receiver_id: selectedTechnicianId,
             items,
             personnel,
+            allow_insufficient_stock: allowInsufficientStock,
           }),
         })
       }
@@ -474,9 +631,10 @@ export default function CreateJO() {
             </div>
 
             <div className="overflow-hidden rounded-2xl border border-gray-200">
-              <div className="grid grid-cols-[72px_1fr_180px_120px_72px] bg-[#fff3f3] px-4 py-3 text-xs font-semibold uppercase tracking-[0.22em] text-gray-600">
+              <div className="grid grid-cols-[72px_1.5fr_140px_180px_120px_72px] bg-[#fff3f3] px-4 py-3 text-xs font-semibold uppercase tracking-[0.22em] text-gray-600">
                 <div>No.</div>
                 <div>Item Name</div>
+                <div>Unit</div>
                 <div>Ref No.</div>
                 <div>Qty</div>
                 <div></div>
@@ -484,11 +642,57 @@ export default function CreateJO() {
 
               <div className="divide-y divide-gray-100 bg-white">
                 {items.map((item, index) => (
-                  <div key={index} className="grid grid-cols-[72px_1fr_180px_120px_72px] items-center gap-3 px-4 py-3">
+                  <div key={index} className="grid grid-cols-[72px_1.5fr_140px_180px_120px_72px] items-start gap-3 px-4 py-3">
                     <div className="text-sm font-semibold text-gray-500">{index + 1}</div>
-                    <input value={item.item_name} onChange={(e) => updateItem(index, 'item_name', e.target.value)} placeholder="Enter item name" className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none placeholder:text-gray-400 focus:border-black" />
+                    <select
+                      value={item.inventory_item_id || item.item_name || ''}
+                      onChange={(e) => updateItemSelection(index, e.target.value)}
+                      className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-black"
+                      disabled={inventoryLoading}
+                    >
+                      <option value="">{inventoryLoading ? 'Loading inventory...' : 'Select item'}</option>
+                      {inventoryItems.map((inventoryItem) => (
+                        <option key={inventoryItem.id} value={inventoryItem.id}>
+                          {inventoryItem.item_name}
+                        </option>
+                      ))}
+                      {item.item_name && !getInventoryItemByRow(item) ? <option value={item.item_name}>{item.item_name}</option> : null}
+                    </select>
+                    <input
+                      value={item.unit || getInventoryItemByRow(item)?.unit || ''}
+                      readOnly
+                      placeholder="Auto-filled"
+                      className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none placeholder:text-gray-400"
+                    />
                     <input value={item.reference_no} onChange={(e) => updateItem(index, 'reference_no', e.target.value)} placeholder="Reference no." className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none placeholder:text-gray-400 focus:border-black" />
-                    <input type="number" min="0" value={item.quantity} onChange={(e) => updateItem(index, 'quantity', e.target.value)} placeholder="0" className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none placeholder:text-gray-400 focus:border-black" />
+                    {(() => {
+                      const selectedInventoryItem = getInventoryItemByRow(item)
+                      const availableStock = Number(selectedInventoryItem?.current_stock ?? 0)
+                      const enteredQuantity = Number(item.quantity)
+                      const hasQuantity = item.quantity !== '' && !Number.isNaN(enteredQuantity)
+                      const isInsufficientStock = Boolean(selectedInventoryItem && hasQuantity && enteredQuantity > availableStock)
+
+                      return (
+                        <div className="space-y-1">
+                          <input
+                            type="number"
+                            min="0"
+                            value={item.quantity}
+                            onChange={(e) => updateItem(index, 'quantity', e.target.value)}
+                            placeholder="0"
+                            className={`rounded-xl border px-3 py-2 text-sm outline-none placeholder:text-gray-400 focus:border-black ${
+                              isInsufficientStock ? 'border-red-400 bg-red-50 text-red-700 focus:border-red-500' : 'border-gray-200'
+                            }`}
+                          />
+                          {selectedInventoryItem ? (
+                            <p className={`text-[11px] font-medium ${isInsufficientStock ? 'text-red-600' : 'text-gray-500'}`}>
+                              Available: {availableStock} {selectedInventoryItem.unit || 'units'}
+                              {isInsufficientStock ? <span className="ml-2 font-semibold">Insufficient stock</span> : null}
+                            </p>
+                          ) : null}
+                        </div>
+                      )
+                    })()}
                     <button type="button" onClick={() => removeItem(index)} className="mx-auto rounded-full border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-500 transition hover:border-red-200 hover:text-red-700" aria-label={`Remove item ${index + 1}`}>
                       -
                     </button>

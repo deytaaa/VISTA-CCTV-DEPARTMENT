@@ -11,6 +11,7 @@ const approvalRoutes = require('./routes/approval');
 const logsRoutes = require('./routes/logs');
 const jobOrdersRoutes = require('./routes/job-orders');
 const usersRoutes = require('./routes/users');
+const inventoryRoutes = require('./routes/inventory');
 
 const app = express();
 app.use(cors());
@@ -26,6 +27,7 @@ app.use('/api/approval', approvalRoutes);
 app.use('/api/logs', logsRoutes);
 app.use('/api/job-orders', jobOrdersRoutes);
 app.use('/api/users', usersRoutes);
+app.use('/api/inventory', inventoryRoutes);
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => console.log(`Backend listening on port ${PORT}`));
