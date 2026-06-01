@@ -16,21 +16,31 @@ export default function InventoryItemPage() {
 
   useEffect(() => {
     if (!id) return
+    if (!session) return
+    if (!session?.access_token) return
+
     let mounted = true
     async function load() {
       setLoading(true)
       try {
-        const res = await fetch(`${API_BASE_URL}/api/inventory/${id}`, { headers: { Authorization: `Bearer ${session?.access_token || ''}` } })
+        const res = await fetch(`${API_BASE_URL}/api/inventory/${id}`, {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        })
         const payload = await res.json()
         if (!mounted) return
         setItem(payload?.data?.item || null)
         setTxs(Array.isArray(payload?.data?.transactions) ? payload.data.transactions : [])
       } catch (e) {
-      } finally { if (mounted) setLoading(false) }
+      } finally {
+        if (mounted) setLoading(false)
+      }
     }
+
     load()
-    return () => { mounted = false }
-  }, [id, session?.access_token])
+    return () => {
+      mounted = false
+    }
+  }, [id, session])
 
   return (
     <ProtectedRoute allowedRoles={['inventory']}>

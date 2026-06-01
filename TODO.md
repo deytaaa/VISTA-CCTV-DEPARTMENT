@@ -1,6 +1,9 @@
-- [x] Fix Create JO page: include Authorization Bearer token when calling /api/jo/next-number
-- [x] Add graceful redirect to /login when token is missing/401 to avoid unhandled abort errors
-- [x] Fix dashboard: avoid abort side effects by handling 401 during dashboard fetch (redirect gracefully)
+- [ ] Inspect current login flow in frontend/pages/login.js
+- [ ] Create plan to wait for Supabase auth session confirmation before router.push('/dashboard')
+- [x] Implement fix using supabase.auth.onAuthStateChange (or getSession polling) in handleSubmit
 
-- [ ] Re-run lint/build/tests if available
+- [x] Update any cleanup logic to avoid memory leaks (unsubscribe listener)
 
+- [x] Quick sanity check: ensure redirect occurs only when session is confirmed
+
+- [ ] Run frontend lint/build (optional)

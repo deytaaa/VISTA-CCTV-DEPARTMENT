@@ -1,47 +1,34 @@
-Test the entire VISTA CCTV system end-to-end using these scenarios:
+Inventory Role — Access Control
+ Login as inventory role → should reach Inventory Dashboard - ✅   
+ Inventory role cannot access Job Orders page → should show access denied - ✅
+ Inventory role cannot access Approval Queue → should show access 
+ denied - ✅
+ Inventory role sidebar only shows Dashboard and Inventory - ✅
 
-Auth
+Inventory — Item Management
+ Log in as inventory role - ✅    
+ Add a new item with name, unit, current stock, and minimum stock → should appear in inventory list - ✅
+ Edit an existing item → changes should save correctly - ✅
+ Delete an item → should ask for confirmation before deleting - ✅
+ Search for an item by name → should filter results correctly - ✅
+ Filter items by status (In Stock / Low Stock / Out of Stock) → should filter correctly - ✅
 
- Login as admin with correct credentials → should reach Admin Console               ✅
- Login as technician with correct credentials → should reach Technician Console     ✅
- Login with wrong password → should show error message                              ✅
- Access dashboard without logging in → should redirect to login page                ✅
+Inventory — Stock Management
+ Click Add Stock on an item → enter quantity and remarks → current stock should increase -✅
+ Verify the Stock In transaction appears in the item's View History page - ✅
+ Set an item's stock below minimum stock → Low Stock badge should appear - ✅
+ Set an item's stock to 0 → Out of Stock badge should appear - ✅ 
+ Verify low stock warning banner appears on inventory dashboard - ✅
 
-Admin — Job Orders
+Inventory — JO Auto Deduct
+ Log in as admin and create a JO with an inventory item and quantity - ✅
+ After JO is generated confirm the item's current stock decreased by the correct quantity - ✅
+ Verify a Stock Out transaction appears in the item's View History linked to the JO number - ✅
+ Create a JO with quantity exceeding available stock → should show insufficient stock warning - ✅
+ Click Proceed Anyway on the warning → JO should still generate - ✅
 
- Create a new JO with location, date, supplies, and assigned technician → JO number should auto-generate                                                                      ✅
- View the created JO in Job Orders list                                             ✅
- Check that the new JO appears in the technician's dashboard                        ✅
-
-Technician — Processing
-
- Log in as technician and find the assigned JO                                      ✅
- Mark it as Processing → status should update                                       ✅
- Upload a proof image and add completion remarks                                    ✅
- Click Save Proof → should save without error                                       ✅
- Click Submit for Approval → status should change to For Approval                   ✅
-
-Admin — Approval
-
- Go to Approval Queue → JO should appear                                            ✅
- Click View Proof → should show the correct uploaded image                          ✅
- Approve the JO → status should change to Approved                                  ✅
- Repeat but this time Reject with a reason → status should change to Rejected       ✅
-
-Technician — Re-upload after Rejection
-
- Find the Rejected JO                                                               ✅
- Upload a different proof image                                                     ✅
- Save and resubmit for approval                                                     ✅
- Log in as admin and confirm the NEW image is showing, not the old one              ✅
-
-Archive & Logs
-
- Check that approved JOs appear in Archive                                          ✅
- Check Activity Logs shows all status changes with correct timestamps               ✅
-
-PDF
- Download PDF of a completed JO → should open correctly with all details filled in  ✅
-
-Report any step that fails, shows the wrong data, or throws an error.
-
+Inventory — Transaction History
+ Click View History on any item → should show all Stock In and Stock Out records - ✅
+ Stock Out records should show the linked JO number - ✅
+ Performed By column should show the correct user name - ✅
+ Refreshing the history page should not show 401 errors in console - ✅

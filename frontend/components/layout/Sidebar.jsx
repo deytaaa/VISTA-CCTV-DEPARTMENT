@@ -85,6 +85,17 @@ function LogsIcon() {
   )
 }
 
+function InventoryIcon() {
+  return (
+    <IconWrapper>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-5 w-5">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2 12l10-5 10 5-10 5-10-5z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 10v6c0 1 3 3 6 3s6-2 6-3v-6" />
+      </svg>
+    </IconWrapper>
+  )
+}
+
 const iconByHref = {
   '/dashboard': DashboardIcon,
   '/jo/create': CreateIcon,
@@ -93,7 +104,9 @@ const iconByHref = {
   '/jo/approval': ApprovalIcon,
   '/jo/archive': ArchiveIcon,
   '/logs': LogsIcon,
+  '/inventory': InventoryIcon,
 }
+
 
 export default function Sidebar({ hidden = false, setHidden = () => {}, mobileOpen = false, setMobileOpen = () => {} }) {
   const router = useRouter()

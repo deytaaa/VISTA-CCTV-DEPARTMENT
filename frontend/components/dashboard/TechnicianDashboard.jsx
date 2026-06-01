@@ -18,7 +18,8 @@ const summaryCards = [
 ]
 
 export default function TechnicianDashboard() {
-  const { user, session } = useAuth()
+  const { user, session, loading: authLoading } = useAuth()
+
   const [rows, setRows] = useState([])
   const [counts, setCounts] = useState({ approved: 0, sent: 0, processing: 0, for_approval: 0, rejected: 0 })
   const [loading, setLoading] = useState(true)
@@ -46,7 +47,11 @@ export default function TechnicianDashboard() {
     let mounted = true
 
     async function loadDashboard() {
+      // Wait for Supabase auth session to fully restore before making API calls.
+      if (authLoading) return
+
       if (!user?.id || !session?.access_token) return
+
 
       setLoading(true)
       setError(null)
@@ -106,7 +111,8 @@ export default function TechnicianDashboard() {
       mounted = false
       supabase.removeChannel(channel)
     }
-  }, [session?.access_token, user?.id])
+  }, [authLoading, session?.access_token, user?.id])
+
 
   return (
     <ProtectedRoute allowedRoles={['technician']}>

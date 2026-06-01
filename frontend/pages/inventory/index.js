@@ -144,10 +144,11 @@ export default function InventoryPage() {
           item_name: itemForm.item_name.trim(),
           description: itemForm.description.trim() || null,
           unit: itemForm.unit,
-          current_stock: Number(itemForm.current_stock || 0),
           minimum_stock: Number(itemForm.minimum_stock || 0),
         }),
       })
+
+
 
       const payload = await response.json()
       if (!response.ok) throw new Error(payload?.error || 'Failed to save item')
@@ -357,8 +358,16 @@ export default function InventoryPage() {
                 </div>
                 <div>
                   <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Current Stock</label>
-                  <input type="number" min="0" value={itemForm.current_stock} onChange={(e) => setItemForm((current) => ({ ...current, current_stock: e.target.value }))} className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-black" />
+                  <input
+                    type="number"
+                    min="0"
+                    value={itemForm.current_stock}
+                    readOnly
+                    className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none"
+                  />
+                  <p className="mt-2 text-xs text-gray-500">Use Add Stock to update quantity</p>
                 </div>
+
                 <div>
                   <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Minimum Stock</label>
                   <input type="number" min="0" value={itemForm.minimum_stock} onChange={(e) => setItemForm((current) => ({ ...current, minimum_stock: e.target.value }))} className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-black" />

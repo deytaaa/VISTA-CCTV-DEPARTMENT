@@ -28,6 +28,30 @@ export default function Login() {
     setError(null)
     setLoading(true)
 
+    // Wait for Supabase session to be fully established before redirecting
+    const waitForSession = async () => {
+      // If we already have a session (or Supabase has set it synchronously), return it.
+      const { data: current } = await supabase.auth.getSession()
+      if (current?.session) return current.session
+
+      return new Promise((resolve) => {
+        const subscription = supabase.auth.onAuthStateChange((_event, nextSession) => {
+          if (nextSession?.session) {
+            subscription?.data?.subscription?.unsubscribe?.()
+            subscription?.unsubscribe?.()
+            resolve(nextSession.session)
+          }
+        })
+
+        // Safety timeout to avoid hanging forever
+        setTimeout(() => {
+          subscription?.data?.subscription?.unsubscribe?.()
+          subscription?.unsubscribe?.()
+          resolve(null)
+        }, 5000)
+      })
+    }
+
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
 
     if (error) {
@@ -55,6 +79,9 @@ export default function Login() {
         console.error('Failed to refresh user profile after login', refreshError)
       }
     }
+
+    // Ensure session is ready before navigating to /dashboard
+    await waitForSession()
 
     router.replace(getNextPath())
   }

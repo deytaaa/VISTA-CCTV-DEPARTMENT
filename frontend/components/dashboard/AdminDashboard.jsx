@@ -52,7 +52,8 @@ function formatActivityAction(action) {
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || ''
 
 export default function AdminDashboard() {
-  const { user, role } = useAuth()
+  const { user, role, loading: authLoading, session } = useAuth()
+
 
   const [rows, setRows] = useState([])
   const [counts, setCounts] = useState({})
@@ -70,12 +71,13 @@ export default function AdminDashboard() {
     let mounted = true
 
     async function loadDashboard() {
-      if (!user?.id) return
+      // Wait for Supabase auth session to fully restore before making API calls.
+      if (authLoading) return
 
-      const { data: sessionData } = await supabase.auth.getSession()
-      const token = sessionData?.session?.access_token
+      const token = session?.access_token
 
-      if (!token) return
+      if (!user?.id || !token) return
+
 
       setLoading(true)
       setError(null)
@@ -158,7 +160,8 @@ export default function AdminDashboard() {
       mounted = false
       supabase.removeChannel(channel)
     }
-  }, [user?.id])
+  }, [authLoading, session?.access_token, user?.id])
+
 
   async function handleSignOut() {
     await supabase.auth.signOut()

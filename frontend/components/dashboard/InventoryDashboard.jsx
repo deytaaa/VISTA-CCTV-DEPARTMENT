@@ -4,20 +4,28 @@ import { useEffect, useState } from 'react'
 import StatCard from './StatCard'
 import { useAuth } from '../../context/AuthContext'
 
+
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || ''
 
 export default function InventoryDashboard() {
-  const { session } = useAuth()
+  const { session, loading: authLoading } = useAuth()
+
   const [counts, setCounts] = useState({ total: 0, in_stock: 0, low_stock: 0, out_of_stock: 0 })
   const [lowStockItems, setLowStockItems] = useState([])
 
   useEffect(() => {
     let mounted = true
     async function load() {
+      if (authLoading) return
+      const token = session?.access_token
+      if (!token) return
+
       try {
         const res = await fetch(`${API_BASE_URL}/api/inventory`, {
-          headers: { Authorization: `Bearer ${session?.access_token || ''}` },
+          headers: { Authorization: `Bearer ${token}` },
         })
+
         const payload = await res.json()
         if (!mounted) return
         const list = Array.isArray(payload?.data) ? payload.data : []
@@ -38,12 +46,26 @@ export default function InventoryDashboard() {
     }
     load()
     return () => { mounted = false }
-  }, [session?.access_token])
+  }, [authLoading, session?.access_token])
+
+
+  if (authLoading) {
+    return (
+      <ProtectedRoute>
+        <Layout title="Inventory Dashboard" subtitle="Inventory Overview">
+          <div className="flex min-h-[40vh] items-center justify-center">
+            <div className="text-sm text-gray-500">Checking session...</div>
+          </div>
+        </Layout>
+      </ProtectedRoute>
+    )
+  }
 
   return (
     <ProtectedRoute>
       <Layout title="Inventory Dashboard" subtitle="Inventory Overview">
         <div className="mx-auto max-w-6xl">
+
           <section className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <StatCard label="Total Items" value={counts.total} />
             <StatCard label="In Stock" value={counts.in_stock} tone="success" />
