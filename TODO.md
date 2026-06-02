@@ -1,9 +1,7 @@
-- [ ] Inspect current login flow in frontend/pages/login.js
-- [ ] Create plan to wait for Supabase auth session confirmation before router.push('/dashboard')
-- [x] Implement fix using supabase.auth.onAuthStateChange (or getSession polling) in handleSubmit
+## TODO - NotificationDropdown fix
 
-- [x] Update any cleanup logic to avoid memory leaks (unsubscribe listener)
+- [ ] Inspect NotificationDropdown.jsx for the incorrect Supabase query usage causing `TypeError: query.from is not a function`.
+- [ ] Fix the code to use Supabase query builder correctly (use the built query directly; remove erroneous `.from('notifications')` chaining).
+- [ ] Ensure inventory-role unread count logic still works as intended.
+- [ ] Run frontend lint/build (if available) or at least run `npm test`/`npm run build` for verification.
 
-- [x] Quick sanity check: ensure redirect occurs only when session is confirmed
-
-- [ ] Run frontend lint/build (optional)

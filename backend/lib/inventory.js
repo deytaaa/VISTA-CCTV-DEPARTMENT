@@ -80,7 +80,7 @@ async function deductInventoryForJobOrder({ items, jobOrderId, joNumber, perform
     throw shortageError
   }
 
-  return { matches, shortages: data?.shortages || shortages, transactions: [] }
+  return { matches, shortages: data?.shortages || shortages, deductions: data?.deductions || [], transactions: [] }
 }
 
 module.exports = {

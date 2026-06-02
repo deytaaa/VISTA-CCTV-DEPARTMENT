@@ -233,13 +233,80 @@ module.exports = {
       if (status === 'sent') {
         try {
           if (Array.isArray(payload.items) && payload.items.length > 0) {
-            await deductInventoryForJobOrder({
+            const inventoryResult = await deductInventoryForJobOrder({
               items: payload.items,
               jobOrderId,
               joNumber: created.jo_number,
               performedBy: req.user?.id || null,
               allowInsufficientStock: Boolean(payload.allow_insufficient_stock),
             });
+
+            // Inventory notifications (per affected item)
+            const deductions = Array.isArray(inventoryResult?.deductions) ? inventoryResult.deductions : [];
+            const { data: inventoryUsers, error: invUserErr } = await supabase
+              .from('users')
+              .select('id')
+              .eq('role', 'inventory');
+
+            if (!invUserErr && Array.isArray(inventoryUsers) && inventoryUsers.length > 0) {
+              const notificationsToInsert = [];
+            const inventoryUserIds = inventoryUsers.map((u) => u.id).filter(Boolean);
+
+              // Deduction notifications for inventory role must use message prefix tags
+              // so the frontend can filter inventory stock alerts.
+              for (const d of deductions) {
+                const quantityUsed = Number(d.quantity_used || 0);
+                const newStock = Number(d.new_stock ?? 0);
+                const minimumStock = Number(d.minimum_stock ?? 0);
+                const unit = d.unit || '';
+                const itemName = d.item_name || '';
+
+                // STOCK DEDUCTED notification for this JO (job_order_id = generated JO id)
+                if (quantityUsed > 0) {
+                  const stockDeductedMessage = `📦 ${quantityUsed} ${unit} of ${itemName} was used in ${created.jo_number}. Remaining stock: ${newStock} ${unit}.`;
+                  for (const uid of inventoryUserIds) {
+                    notificationsToInsert.push({
+                      user_id: uid,
+                      message: stockDeductedMessage,
+                      job_order_id: jobOrderId,
+                      is_read: false,
+                      created_at: new Date().toISOString(),
+                    });
+                  }
+                }
+
+                // OUT OF STOCK / LOW STOCK after deduction
+                if (newStock === 0) {
+                  const outMessage = `❌ Out of Stock: ${itemName} has no units remaining. Immediate restocking required.`;
+                  for (const uid of inventoryUserIds) {
+                    notificationsToInsert.push({
+                      user_id: uid,
+                      message: outMessage,
+                      job_order_id: null,
+                      is_read: false,
+                      created_at: new Date().toISOString(),
+                    });
+                  }
+                } else if (newStock > 0 && newStock <= minimumStock) {
+                  const lowMessage = `Low Stock Alert: ${itemName} (${newStock} ${unit} remaining)`;
+                  for (const uid of inventoryUserIds) {
+                    notificationsToInsert.push({
+                      user_id: uid,
+                      message: lowMessage,
+                      job_order_id: null,
+                      is_read: false,
+                      created_at: new Date().toISOString(),
+                    });
+                  }
+                }
+
+              }
+
+              if (notificationsToInsert.length > 0) {
+                const insertPromises = notificationsToInsert.map((n) => supabase.from('notifications').insert(n));
+                await Promise.all(insertPromises);
+              }
+            }
           }
         } catch (inventoryError) {
           await supabase.from('job_orders').delete().eq('id', jobOrderId);
@@ -333,7 +400,7 @@ module.exports = {
 
       if (payload.status === 'sent' && current.status !== 'sent' && Array.isArray(payload.items) && payload.items.length > 0) {
         try {
-          await deductInventoryForJobOrder({
+          const inventoryResult = await deductInventoryForJobOrder({
             items: payload.items,
             jobOrderId: id,
             joNumber: data?.jo_number || payload.jo_number || current.jo_number || null,

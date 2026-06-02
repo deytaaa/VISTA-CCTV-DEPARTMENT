@@ -172,6 +172,29 @@ begin
     );
   end loop;
 
-  return jsonb_build_object('shortages', shortages);
+  /*
+    Return shape:
+    - shortages: array of shortage objects (existing behavior)
+    - deductions: array of per-item deduction results needed for inventory notifications
+  */
+  return jsonb_build_object(
+    'shortages', shortages,
+    'deductions', (
+      select coalesce(jsonb_agg(d), '[]'::jsonb)
+      from (
+        select
+          ii.id as inventory_item_id,
+          ii.item_name,
+          ii.unit,
+          ii.minimum_stock,
+          (coalesce(ii.current_stock, 0) - (coalesce((elem->>'quantity')::numeric, 0))) as new_stock,
+          coalesce((elem->>'quantity')::numeric, 0) as quantity_used
+        from jsonb_array_elements(p_items) as elem
+        join public.inventory_items ii
+          on lower(trim(ii.item_name)) = lower(trim(coalesce(elem->>'item_name', '')))
+        where coalesce((elem->>'quantity')::numeric, 0) > 0
+      ) d
+    )
+  );
 end;
 $$;

@@ -143,7 +143,7 @@ export default function Sidebar({ hidden = false, setHidden = () => {}, mobileOp
             </div>
             {!hidden ? (
               <div className="min-w-0">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] leading-4 text-white/75">City Government of Taguig</p>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] leading-4 text-white/75">City Goverment of Taguig</p>
                 <h1 className="mt-1 text-lg font-black leading-tight tracking-tight">CCTV Department</h1>
               </div>
             ) : null}

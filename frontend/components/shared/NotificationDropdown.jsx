@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabaseClient'
 
+
 function formatDate(value) {
   if (!value) return 'Now'
   try {
@@ -16,7 +17,8 @@ function formatAlertText(item) {
 }
 
 export default function NotificationDropdown() {
-  const { session, user } = useAuth()
+  const { session, user, role } = useAuth()
+
   const [open, setOpen] = useState(false)
   const [items, setItems] = useState([])
   const [unreadCount, setUnreadCount] = useState(0)
@@ -27,13 +29,26 @@ export default function NotificationDropdown() {
   async function loadUnreadCount() {
     if (!session?.access_token || !user?.id) return
 
-    const { count } = await supabase
+    // Inventory role should only count unread stock alerts (LOW / OUT / STOCK DEDUCTED)
+    const isInventoryRole = role === 'inventory'
+
+    let query = supabase
       .from('notifications')
       .select('*', { count: 'exact', head: true })
       .eq('user_id', user.id)
       .eq('is_read', false)
 
+
+      if (isInventoryRole) {
+      query = query.or(
+        "message.ilike.⚠ Low Stock:%;message.ilike.Low Stock Alert:%;message.ilike.❌ Out of Stock:%;message.ilike.📦%"
+      )
+    }
+
+
+    const { count } = await query
     setUnreadCount(Number(count || 0))
+
   }
 
   async function loadNotifications() {
@@ -55,7 +70,24 @@ export default function NotificationDropdown() {
           .eq('is_read', false),
       ])
 
-      setItems(Array.isArray(data) ? data : [])
+      const all = Array.isArray(data) ? data : []
+      const filtered =
+        role === 'inventory'
+          ? all.filter((n) => {
+              const m = String(n?.message || '')
+              return (
+                m.startsWith('⚠ Low Stock:') ||
+                m.startsWith('Low Stock Alert:') ||
+                m.startsWith('❌ Out of Stock:') ||
+                m.startsWith('📦')
+              )
+            })
+          : all
+
+
+      setItems(filtered)
+
+      // For inventory role, unreadCount should already be limited by loadUnreadCount()
       setUnreadCount(Number(unreadResult?.count || 0))
     } finally {
       setLoading(false)
@@ -106,6 +138,22 @@ export default function NotificationDropdown() {
     loadNotifications()
     loadUnreadCount()
 
+    // Keep unreadCount consistent with dropdown filtering
+    if (role === 'inventory') {
+      setItems((current) =>
+        current.filter((n) => {
+          const m = String(n?.message || '')
+          return (
+            m.startsWith('⚠ Low Stock:') ||
+            m.startsWith('Low Stock Alert:') ||
+            m.startsWith('❌ Out of Stock:') ||
+            m.startsWith('📦')
+          )
+
+        })
+      )
+    }
+
     const channel = supabase
       .channel('notifications-header')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, () => {
@@ -118,6 +166,8 @@ export default function NotificationDropdown() {
       supabase.removeChannel(channel)
     }
   }, [session?.access_token, user?.id])
+
+  const isInventoryRole = role === 'inventory'
 
   return (
     <div className="relative">
