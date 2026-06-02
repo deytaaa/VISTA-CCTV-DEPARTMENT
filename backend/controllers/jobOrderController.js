@@ -233,6 +233,9 @@ module.exports = {
       if (status === 'sent') {
         try {
           if (Array.isArray(payload.items) && payload.items.length > 0) {
+            console.log('[jobOrderController.create] status=sent, starting inventory deduct + notifications');
+            console.log('[jobOrderController.create] jobOrderId=', jobOrderId, 'joNumber=', created.jo_number, 'performedBy=', req.user?.id || null);
+
             const inventoryResult = await deductInventoryForJobOrder({
               items: payload.items,
               jobOrderId,
@@ -241,16 +244,24 @@ module.exports = {
               allowInsufficientStock: Boolean(payload.allow_insufficient_stock),
             });
 
-            // Inventory notifications (per affected item)
+            console.log('[jobOrderController.create] inventoryResult keys=', inventoryResult ? Object.keys(inventoryResult) : inventoryResult);
             const deductions = Array.isArray(inventoryResult?.deductions) ? inventoryResult.deductions : [];
+            console.log('[jobOrderController.create] deductions.length=', deductions.length);
+            if (deductions.length > 0) console.log('[jobOrderController.create] deductions.sample=', deductions[0]);
+
+            // Inventory notifications (per affected item)
             const { data: inventoryUsers, error: invUserErr } = await supabase
               .from('users')
               .select('id')
               .eq('role', 'inventory');
 
+            console.log('[jobOrderController.create] inventoryUsers count=', Array.isArray(inventoryUsers) ? inventoryUsers.length : null, 'invUserErr=', invUserErr);
+
             if (!invUserErr && Array.isArray(inventoryUsers) && inventoryUsers.length > 0) {
               const notificationsToInsert = [];
               const inventoryUserIds = inventoryUsers.map((u) => u.id).filter(Boolean);
+              console.log('[jobOrderController.create] inventoryUserIds=', inventoryUserIds);
+
 
               const lowStockDeductions = Array.isArray(deductions)
                 ? deductions.filter((d) => Number(d?.new_stock ?? 0) <= Number(d?.minimum_stock ?? 0) && Number(d?.new_stock ?? 0) > 0)
@@ -286,6 +297,28 @@ module.exports = {
                     });
                   }
                 }
+
+                // After stock deduction or stock-in, check and insert low stock notification
+                const insertLowStockNotification = async (item) => {
+                  if (item.current_stock <= item.minimum_stock) {
+                    const { data: inventoryUser } = await supabase
+                      .from('users')
+                      .select('id')
+                      .eq('role', 'inventory')
+                      .limit(1)
+                      .single();
+
+                    if (inventoryUser?.id) {
+                      await supabase.from('notifications').insert({
+                        user_id: inventoryUser.id,
+                        title: 'Low Stock Alert',
+                        message: `Low Stock Alert: ${item.item_name} (${item.current_stock} ${item.unit} remaining)`,
+                        is_read: false,
+                        created_at: new Date().toISOString()
+                      });
+                    }
+                  }
+                };
 
                 // OUT OF STOCK / LOW STOCK after deduction
                 if (newStock === 0) {
