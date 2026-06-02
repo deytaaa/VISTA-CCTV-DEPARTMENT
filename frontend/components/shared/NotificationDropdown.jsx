@@ -56,6 +56,7 @@ export default function NotificationDropdown() {
 
     setLoading(true)
     try {
+      console.log('[NotificationDropdown] loadNotifications using user.id=', user?.id, 'role=', role)
       const [{ data }, unreadResult] = await Promise.all([
         supabase
           .from('notifications')
@@ -70,6 +71,8 @@ export default function NotificationDropdown() {
           .eq('is_read', false),
       ])
 
+      console.log('[NotificationDropdown] raw notifications query result data=', data, 'unreadResult=', unreadResult)
+
       const all = Array.isArray(data) ? data : []
       const filtered =
         role === 'inventory'
@@ -83,7 +86,6 @@ export default function NotificationDropdown() {
               )
             })
           : all
-
 
       setItems(filtered)
 

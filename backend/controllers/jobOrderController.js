@@ -1,4 +1,4 @@
-const supabase = require('../lib/supabase');
+const supabase = require('../lib/supabase')
 const { previewInventoryUsage, deductInventoryForJobOrder } = require('../lib/inventory');
 
 function normalizeRpcJoNumber(rpcResult) {
@@ -250,11 +250,23 @@ module.exports = {
 
             if (!invUserErr && Array.isArray(inventoryUsers) && inventoryUsers.length > 0) {
               const notificationsToInsert = [];
-            const inventoryUserIds = inventoryUsers.map((u) => u.id).filter(Boolean);
+              const inventoryUserIds = inventoryUsers.map((u) => u.id).filter(Boolean);
+
+              const lowStockDeductions = Array.isArray(deductions)
+                ? deductions.filter((d) => Number(d?.new_stock ?? 0) <= Number(d?.minimum_stock ?? 0) && Number(d?.new_stock ?? 0) > 0)
+                : [];
+
+              const outOfStockDeductions = Array.isArray(deductions)
+                ? deductions.filter((d) => Number(d?.new_stock ?? 0) === 0)
+                : [];
+
+              const stockDeductedDeductions = Array.isArray(deductions)
+                ? deductions.filter((d) => Number(d?.quantity_used ?? 0) > 0)
+                : [];
 
               // Deduction notifications for inventory role must use message prefix tags
               // so the frontend can filter inventory stock alerts.
-              for (const d of deductions) {
+              for (const d of stockDeductedDeductions) {
                 const quantityUsed = Number(d.quantity_used || 0);
                 const newStock = Number(d.new_stock ?? 0);
                 const minimumStock = Number(d.minimum_stock ?? 0);

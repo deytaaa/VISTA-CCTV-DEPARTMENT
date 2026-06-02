@@ -493,6 +493,155 @@ export default function JOListPage({
     }
   }
 
+  function TechnicianRowActionsMobile({ row }) {
+    const status = (row.status || '').toLowerCase()
+    const latestCompletion = getLatestCompletionReport(row)
+    const rejectedAt = new Date(row?.rejected_at || row?.updated_at || 0).getTime()
+    const hasProofAfterRejection = Boolean(
+      latestCompletion &&
+        (latestCompletion.proof_file || latestCompletion.proof_url) &&
+        rejectedAt &&
+        getCompletionReportTimestamp(latestCompletion) > rejectedAt,
+    )
+
+    const [open, setOpen] = useState(false)
+    const wrapperRef = useRef(null)
+
+    useEffect(() => {
+      function onDocClick(e) {
+        if (!open) return
+        if (!wrapperRef.current) return
+        if (wrapperRef.current.contains(e.target)) return
+        setOpen(false)
+      }
+      document.addEventListener('mousedown', onDocClick)
+      document.addEventListener('touchstart', onDocClick)
+      return () => {
+        document.removeEventListener('mousedown', onDocClick)
+        document.removeEventListener('touchstart', onDocClick)
+      }
+    }, [open])
+
+    function ActionItem({ children, onClick, href, ariaLabel }) {
+      const classes = 'block w-full rounded-xl px-3 py-2 text-left text-sm font-semibold text-black hover:bg-gray-50'
+      if (href) {
+        return (
+          <Link
+            href={href}
+            className={classes}
+            onClick={() => setOpen(false)}
+            aria-label={ariaLabel}
+          >
+            {children}
+          </Link>
+        )
+      }
+      return (
+        <button type="button" onClick={onClick} className={classes} aria-label={ariaLabel}>
+          {children}
+        </button>
+      )
+    }
+
+    return (
+      <div className="relative inline-block" ref={wrapperRef}>
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-label="Open job order actions"
+          className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-200"
+        >
+          <span aria-hidden="true" className="text-xl leading-none">⋯</span>
+        </button>
+
+        {open ? (
+          <div className="absolute right-0 z-10 mt-2 w-56 rounded-2xl border border-gray-200 bg-white p-2 shadow-lg">
+            <div className="flex flex-col gap-1">
+              <ActionItem href={`/jo/${row.id}`} ariaLabel="View job order">
+                View
+              </ActionItem>
+
+              <ActionItem href={`/jo/${row.id}/pdf`} ariaLabel="Download PDF">
+                Download PDF
+              </ActionItem>
+
+              {status === 'sent' ? (
+                <ActionItem
+                  onClick={() => {
+                    setOpen(false)
+                    handleMarkProcessing(row.id)
+                  }}
+                  ariaLabel="Mark as Processing"
+                >
+                  {actionLoadingId === row.id ? 'Working…' : 'Mark as Processing'}
+                </ActionItem>
+              ) : null}
+
+              {status === 'processing' ? (
+                latestCompletion?.proof_file || latestCompletion?.proof_url ? (
+                  <ActionItem
+                    onClick={() => {
+                      setOpen(false)
+                      handleSubmitForApproval(row.id)
+                    }}
+                    ariaLabel="Submit for Approval"
+                  >
+                    {actionLoadingId === row.id ? 'Submitting…' : 'Submit for Approval'}
+                  </ActionItem>
+                ) : (
+                  <ActionItem
+                    onClick={() => {
+                      setOpen(false)
+                      openProofModal(row)
+                    }}
+                    ariaLabel="Upload Proof"
+                  >
+                    Upload Proof
+                  </ActionItem>
+                )
+              ) : null}
+
+              {status === 'rejected' ? (
+                hasProofAfterRejection ? (
+                  <ActionItem
+                    onClick={() => {
+                      setOpen(false)
+                      handleSubmitForApproval(row.id)
+                    }}
+                    ariaLabel="Submit for Approval"
+                  >
+                    {actionLoadingId === row.id ? 'Submitting…' : 'Submit for Approval'}
+                  </ActionItem>
+                ) : (
+                  <>
+                    <ActionItem
+                      onClick={() => {
+                        setOpen(false)
+                        openProofModal(row)
+                      }}
+                      ariaLabel="Re-upload Proof"
+                    >
+                      Re-upload Proof
+                    </ActionItem>
+                    <ActionItem
+                      onClick={() => {
+                        setOpen(false)
+                        handleSubmitForApproval(row.id)
+                      }}
+                      ariaLabel="Submit for Approval"
+                    >
+                      {actionLoadingId === row.id ? 'Submitting…' : 'Submit for Approval'}
+                    </ActionItem>
+                  </>
+                )
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+      </div>
+    )
+  }
+
   function renderTechnicianActions(row) {
     const status = (row.status || '').toLowerCase()
     const latestCompletion = getLatestCompletionReport(row)
@@ -1092,6 +1241,7 @@ export default function JOListPage({
                           <th className="px-4 py-3 hidden md:table-cell">Date</th>
                           <th className="px-4 py-3">Status</th>
                           <th className="px-4 py-3 hidden md:table-cell">Actions</th>
+                          <th className="px-4 py-3 md:hidden" aria-label="Row actions" />
                         </tr>
                       </thead>
                       <tbody>
@@ -1156,6 +1306,11 @@ export default function JOListPage({
                                     )}
                                   </div>
                                 )}
+                              </td>
+                              <td className="px-4 py-4 md:hidden">
+                                {isTechnicianView ? (
+                                  <TechnicianRowActionsMobile row={row} />
+                                ) : null}
                               </td>
                             </tr>
                           )
