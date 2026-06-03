@@ -257,112 +257,90 @@ module.exports = {
             console.log('[jobOrderController.create] deductions.length=', deductions.length);
             if (deductions.length > 0) console.log('[jobOrderController.create] deductions.sample=', deductions[0]);
 
-            // Inventory notifications (per affected item)
-            const { data: inventoryUsers, error: invUserErr } = await supabase
-              .from('users')
-              .select('id')
-              .eq('role', 'inventory');
+              // Inventory notifications (per affected item)
+              const { data: inventoryUsers, error: invUserErr } = await supabase
+                .from('users')
+                .select('id')
+                .eq('role', 'inventory');
 
-            console.log('[jobOrderController.create] inventoryUsers count=', Array.isArray(inventoryUsers) ? inventoryUsers.length : null, 'invUserErr=', invUserErr);
+              console.log('[jobOrderController.create] inventoryUsers count=', Array.isArray(inventoryUsers) ? inventoryUsers.length : null, 'invUserErr=', invUserErr);
 
-            if (!invUserErr && Array.isArray(inventoryUsers) && inventoryUsers.length > 0) {
-              const notificationsToInsert = [];
-              const inventoryUserIds = inventoryUsers.map((u) => u.id).filter(Boolean);
-              console.log('[jobOrderController.create] inventoryUserIds=', inventoryUserIds);
+              if (!invUserErr && Array.isArray(inventoryUsers) && inventoryUsers.length > 0) {
+                const notificationsToInsert = [];
+                const inventoryUserIds = inventoryUsers.map((u) => u.id).filter(Boolean);
+                console.log('[jobOrderController.create] inventoryUserIds=', inventoryUserIds);
 
+                const stockDeductedDeductions = Array.isArray(deductions)
+                  ? deductions.filter((d) => Number(d?.quantity_used ?? 0) > 0)
+                  : [];
 
-              const lowStockDeductions = Array.isArray(deductions)
-                ? deductions.filter((d) => Number(d?.new_stock ?? 0) <= Number(d?.minimum_stock ?? 0) && Number(d?.new_stock ?? 0) > 0)
-                : [];
+                // Deduction notifications for inventory role must use message prefix tags
+                // so the frontend can filter inventory stock alerts.
+                for (const d of stockDeductedDeductions) {
+                  const quantityUsed = Number(d.quantity_used || 0);
+                  const unit = d.unit || '';
+                  const itemName = d.item_name || '';
+                  const minimumStock = Number(d.minimum_stock ?? 0);
 
-              const outOfStockDeductions = Array.isArray(deductions)
-                ? deductions.filter((d) => Number(d?.new_stock ?? 0) === 0)
-                : [];
+                  // IMPORTANT: Use the real remaining stock from DB (after RPC deduction)
+                  const { data: freshItem } = await supabase
+                    .from('inventory_items')
+                    .select('id, current_stock, item_name, unit')
+                    .eq('id', d.inventory_item_id)
+                    .single();
 
-              const stockDeductedDeductions = Array.isArray(deductions)
-                ? deductions.filter((d) => Number(d?.quantity_used ?? 0) > 0)
-                : [];
+                  const actualStock = Number(freshItem?.current_stock ?? d.new_stock ?? 0);
+                  const actualUnit = freshItem?.unit || unit;
+                  const actualItemName = freshItem?.item_name || itemName;
 
-              // Deduction notifications for inventory role must use message prefix tags
-              // so the frontend can filter inventory stock alerts.
-              for (const d of stockDeductedDeductions) {
-                const quantityUsed = Number(d.quantity_used || 0);
-                const newStock = Number(d.new_stock ?? 0);
-                const minimumStock = Number(d.minimum_stock ?? 0);
-                const unit = d.unit || '';
-                const itemName = d.item_name || '';
-
-                // STOCK DEDUCTED notification for this JO (job_order_id = generated JO id)
-                if (quantityUsed > 0) {
-                  const stockDeductedMessage = `📦 ${quantityUsed} ${unit} of ${itemName} was used in ${created.jo_number}. Remaining stock: ${newStock} ${unit}.`;
-                  for (const uid of inventoryUserIds) {
-                    notificationsToInsert.push({
-                      user_id: uid,
-                      title: 'Inventory Alert',
-                      message: stockDeductedMessage,
-                      job_order_id: jobOrderId,
-                      is_read: false,
-                      created_at: new Date().toISOString(),
-                    });
-                  }
-                }
-
-                // After stock deduction or stock-in, check and insert low stock notification
-                const insertLowStockNotification = async (item) => {
-                  if (item.current_stock <= item.minimum_stock) {
-                    const { data: inventoryUser } = await supabase
-                      .from('users')
-                      .select('id')
-                      .eq('role', 'inventory')
-                      .limit(1)
-                      .single();
-
-                    if (inventoryUser?.id) {
-                      await supabase.from('notifications').insert({
-                        user_id: inventoryUser.id,
-                        title: 'Low Stock Alert',
-                        message: `Low Stock Alert: ${item.item_name} (${item.current_stock} ${item.unit} remaining)`,
+                  // STOCK DEDUCTED notification for this JO (job_order_id = generated JO id)
+                  if (quantityUsed > 0) {
+                    const stockDeductedMessage = `📦 ${quantityUsed} ${actualUnit} of ${actualItemName} was used in ${created.jo_number}. Remaining stock: ${actualStock} ${actualUnit}.`;
+                    for (const uid of inventoryUserIds) {
+                      notificationsToInsert.push({
+                        user_id: uid,
+                        title: 'Inventory Alert',
+                        message: stockDeductedMessage,
+                        job_order_id: jobOrderId,
                         is_read: false,
-                        created_at: new Date().toISOString()
+                        created_at: new Date().toISOString(),
                       });
                     }
                   }
-                };
 
-                // OUT OF STOCK / LOW STOCK after deduction
-                if (newStock === 0) {
-                  const outMessage = `❌ Out of Stock: ${itemName} has no units remaining. Immediate restocking required.`;
-                  for (const uid of inventoryUserIds) {
-                    notificationsToInsert.push({
-                      user_id: uid,
-                      title: 'Out of Stock Alert',
-                      message: outMessage,
-                      job_order_id: null,
-                      is_read: false,
-                      created_at: new Date().toISOString(),
-                    });
-                  }
-                } else if (newStock > 0 && newStock <= minimumStock) {
-                  const lowMessage = `Low Stock Alert: ${itemName} (${newStock} ${unit} remaining)`;
-                  for (const uid of inventoryUserIds) {
-                    notificationsToInsert.push({
-                      user_id: uid,
-                      title: 'Low Stock Alert',
-                      message: lowMessage,
-                      job_order_id: null,
-                      is_read: false,
-                      created_at: new Date().toISOString(),
-                    });
+                  // OUT OF STOCK / LOW STOCK after deduction (based on actualStock)
+                  if (actualStock === 0) {
+                    const outMessage = `❌ Out of Stock: ${actualItemName} has no units remaining. Immediate restocking required.`;
+                    for (const uid of inventoryUserIds) {
+                      notificationsToInsert.push({
+                        user_id: uid,
+                        title: 'Out of Stock Alert',
+                        message: outMessage,
+                        job_order_id: null,
+                        is_read: false,
+                        created_at: new Date().toISOString(),
+                      });
+                    }
+                  } else if (actualStock > 0 && actualStock <= minimumStock) {
+                    const lowMessage = `Low Stock Alert: ${actualItemName} (${actualStock} ${actualUnit} remaining)`;
+                    for (const uid of inventoryUserIds) {
+                      notificationsToInsert.push({
+                        user_id: uid,
+                        title: 'Low Stock Alert',
+                        message: lowMessage,
+                        job_order_id: null,
+                        is_read: false,
+                        created_at: new Date().toISOString(),
+                      });
+                    }
                   }
                 }
 
+                if (notificationsToInsert.length > 0) {
+                  const insertPromises = notificationsToInsert.map((n) => supabase.from('notifications').insert(n));
+                  await Promise.all(insertPromises);
+                }
               }
-
-              if (notificationsToInsert.length > 0) {
-                const insertPromises = notificationsToInsert.map((n) => supabase.from('notifications').insert(n));
-                await Promise.all(insertPromises);
-              }
-            }
           }
         } catch (inventoryError) {
           await supabase.from('job_orders').delete().eq('id', jobOrderId);
