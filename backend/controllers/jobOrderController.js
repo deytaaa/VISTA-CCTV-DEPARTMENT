@@ -236,13 +236,21 @@ module.exports = {
             console.log('[jobOrderController.create] status=sent, starting inventory deduct + notifications');
             console.log('[jobOrderController.create] jobOrderId=', jobOrderId, 'joNumber=', created.jo_number, 'performedBy=', req.user?.id || null);
 
+            const items = payload.items;
+            console.log('[jobOrderController] items being sent to deduction:', JSON.stringify(items, null, 2));
+
             const inventoryResult = await deductInventoryForJobOrder({
-              items: payload.items,
+              items,
               jobOrderId,
               joNumber: created.jo_number,
               performedBy: req.user?.id || null,
               allowInsufficientStock: Boolean(payload.allow_insufficient_stock),
             });
+
+            console.log('[jobOrderController] inventoryResult.shortages:', JSON.stringify(inventoryResult.shortages, null, 2));
+            console.log('[jobOrderController] inventoryResult.deductions:', JSON.stringify(inventoryResult.deductions, null, 2));
+            console.log('[jobOrderController] inventoryResult.transactions:', JSON.stringify(inventoryResult.transactions, null, 2));
+
 
             console.log('[jobOrderController.create] inventoryResult keys=', inventoryResult ? Object.keys(inventoryResult) : inventoryResult);
             const deductions = Array.isArray(inventoryResult?.deductions) ? inventoryResult.deductions : [];
@@ -290,6 +298,7 @@ module.exports = {
                   for (const uid of inventoryUserIds) {
                     notificationsToInsert.push({
                       user_id: uid,
+                      title: 'Inventory Alert',
                       message: stockDeductedMessage,
                       job_order_id: jobOrderId,
                       is_read: false,
@@ -326,6 +335,7 @@ module.exports = {
                   for (const uid of inventoryUserIds) {
                     notificationsToInsert.push({
                       user_id: uid,
+                      title: 'Out of Stock Alert',
                       message: outMessage,
                       job_order_id: null,
                       is_read: false,
@@ -337,6 +347,7 @@ module.exports = {
                   for (const uid of inventoryUserIds) {
                     notificationsToInsert.push({
                       user_id: uid,
+                      title: 'Low Stock Alert',
                       message: lowMessage,
                       job_order_id: null,
                       is_read: false,

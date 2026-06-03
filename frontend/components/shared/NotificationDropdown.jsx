@@ -26,29 +26,36 @@ export default function NotificationDropdown() {
 
   const visibleItems = useMemo(() => items, [items])
 
+  function isInventoryNotification(notification) {
+    const message = String(notification?.message || '')
+    const title = String(notification?.title || '')
+
+    return (
+      title === 'Low Stock Alert' ||
+      title === 'Out of Stock Alert' ||
+      title === 'Inventory Alert' ||
+      message.startsWith('⚠ Low Stock:') ||
+      message.startsWith('Low Stock Alert:') ||
+      message.startsWith('❌ Out of Stock:') ||
+      message.startsWith('📦')
+    )
+  }
+
   async function loadUnreadCount() {
     if (!session?.access_token || !user?.id) return
 
-    // Inventory role should only count unread stock alerts (LOW / OUT / STOCK DEDUCTED)
-    const isInventoryRole = role === 'inventory'
-
-    let query = supabase
+    const query = supabase
       .from('notifications')
-      .select('*', { count: 'exact', head: true })
+      .select('id, title, message, is_read', { count: 'exact' })
       .eq('user_id', user.id)
       .eq('is_read', false)
 
-
-      if (isInventoryRole) {
-      query = query.or(
-        "message.ilike.⚠ Low Stock:%;message.ilike.Low Stock Alert:%;message.ilike.❌ Out of Stock:%;message.ilike.📦%"
-      )
+    if (role === 'inventory') {
+      query.in('title', ['Low Stock Alert', 'Out of Stock Alert', 'Inventory Alert'])
     }
-
 
     const { count } = await query
     setUnreadCount(Number(count || 0))
-
   }
 
   async function loadNotifications() {
@@ -60,13 +67,13 @@ export default function NotificationDropdown() {
       const [{ data }, unreadResult] = await Promise.all([
         supabase
           .from('notifications')
-          .select('*')
+          .select('*, job_order:job_orders(id, jo_number)')
           .eq('user_id', user.id)
           .order('created_at', { ascending: false })
           .limit(10),
         supabase
           .from('notifications')
-          .select('*', { count: 'exact', head: true })
+          .select('id, title, message, is_read', { count: 'exact' })
           .eq('user_id', user.id)
           .eq('is_read', false),
       ])
@@ -74,23 +81,16 @@ export default function NotificationDropdown() {
       console.log('[NotificationDropdown] raw notifications query result data=', data, 'unreadResult=', unreadResult)
 
       const all = Array.isArray(data) ? data : []
-      const filtered =
-        role === 'inventory'
-          ? all.filter((n) => {
-              const m = String(n?.message || '')
-              return (
-                m.startsWith('⚠ Low Stock:') ||
-                m.startsWith('Low Stock Alert:') ||
-                m.startsWith('❌ Out of Stock:') ||
-                m.startsWith('📦')
-              )
-            })
-          : all
+      const filtered = role === 'inventory' ? all.filter(isInventoryNotification) : all
 
       setItems(filtered)
 
       // For inventory role, unreadCount should already be limited by loadUnreadCount()
-      setUnreadCount(Number(unreadResult?.count || 0))
+      if (role === 'inventory') {
+        setUnreadCount(filtered.filter((notification) => !notification.is_read).length)
+      } else {
+        setUnreadCount(Number(unreadResult?.count || 0))
+      }
     } finally {
       setLoading(false)
     }
@@ -135,26 +135,8 @@ export default function NotificationDropdown() {
   }
 
   useEffect(() => {
-    let mounted = true
-
     loadNotifications()
     loadUnreadCount()
-
-    // Keep unreadCount consistent with dropdown filtering
-    if (role === 'inventory') {
-      setItems((current) =>
-        current.filter((n) => {
-          const m = String(n?.message || '')
-          return (
-            m.startsWith('⚠ Low Stock:') ||
-            m.startsWith('Low Stock Alert:') ||
-            m.startsWith('❌ Out of Stock:') ||
-            m.startsWith('📦')
-          )
-
-        })
-      )
-    }
 
     const channel = supabase
       .channel('notifications-header')
@@ -164,12 +146,9 @@ export default function NotificationDropdown() {
       .subscribe()
 
     return () => {
-      mounted = false
       supabase.removeChannel(channel)
     }
-  }, [session?.access_token, user?.id])
-
-  const isInventoryRole = role === 'inventory'
+  }, [role, session?.access_token, user?.id])
 
   return (
     <div className="relative">

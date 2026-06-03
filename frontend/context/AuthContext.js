@@ -9,14 +9,7 @@ function buildFallbackProfile(nextSession, payload = {}) {
   const authUser = payload?.authUser || null
   const mergedUser = payload?.user || null
 
-  const role =
-    mergedUser?.role ||
-    payload?.profile?.role ||
-    authUser?.app_metadata?.role ||
-    authUser?.user_metadata?.role ||
-    sessionUser?.app_metadata?.role ||
-    sessionUser?.user_metadata?.role ||
-    null
+  const role = mergedUser?.role || payload?.profile?.role || null
 
   return {
     ...(payload?.profile || {}),
@@ -119,7 +112,7 @@ export function AuthProvider({ children }) {
       session,
       user: session?.user ?? null,
       profile,
-      role: profile?.role ?? session?.user?.app_metadata?.role ?? session?.user?.user_metadata?.role ?? null,
+      role: profile?.role ?? null,
       loading,
       isAuthenticated: Boolean(session),
     }),

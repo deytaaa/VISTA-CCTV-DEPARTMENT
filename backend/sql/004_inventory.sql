@@ -105,7 +105,7 @@ begin
   loop
     select * into inventory_item
     from public.inventory_items
-    where lower(trim(item_name)) = lower(trim(coalesce(item->>'item_name', '')))
+    where id = (item->>'inventory_item_id')::uuid
     limit 1;
 
     required := coalesce((item->>'quantity')::numeric, 0);
@@ -140,7 +140,7 @@ begin
   loop
     select * into inventory_item
     from public.inventory_items
-    where lower(trim(item_name)) = lower(trim(coalesce(item->>'item_name', '')))
+    where id = (item->>'inventory_item_id')::uuid
     limit 1;
 
     required := coalesce((item->>'quantity')::numeric, 0);
@@ -191,7 +191,7 @@ begin
           coalesce((elem->>'quantity')::numeric, 0) as quantity_used
         from jsonb_array_elements(p_items) as elem
         join public.inventory_items ii
-          on lower(trim(ii.item_name)) = lower(trim(coalesce(elem->>'item_name', '')))
+          on ii.id = (elem->>'inventory_item_id')::uuid
         where coalesce((elem->>'quantity')::numeric, 0) > 0
       ) d
     )
