@@ -3,6 +3,8 @@ import { useEffect, useMemo, useState } from 'react'
 import ProtectedRoute from '../../components/ProtectedRoute'
 import Layout from '../../components/layout/Layout'
 import { useAuth } from '../../context/AuthContext'
+import { supabase } from '../../lib/supabaseClient'
+
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || ''
 
@@ -82,6 +84,30 @@ export default function InventoryPage() {
     loadItems()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.access_token])
+
+  useEffect(() => {
+    if (!session?.access_token) return undefined
+
+    const channel = supabase
+      .channel('inventory-items-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'inventory_items',
+        },
+        () => {
+          loadItems()
+        },
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [session?.access_token])
+
 
   useEffect(() => {
     if (!toast) return undefined
