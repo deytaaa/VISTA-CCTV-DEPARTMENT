@@ -95,35 +95,35 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen relative overflow-hidden bg-white text-black">
+    <div className="min-h-screen relative overflow-hidden bg-gray-150 text-black">
       <div className="absolute inset-0">
         <img
           src="/images/cctv_login_bg.png"
           alt="Taguig city background"
           className="h-full w-full object-cover opacity-100"
         />
-        <div className="absolute inset-0 bg-black/15" />
+        <div className="" />
       </div>
 
       <div className="relative z-10 min-h-screen flex items-center justify-center px-4 py-8">
         <div className="w-full max-w-md rounded-[28px] border border-gray-200 bg-white px-6 py-8 shadow-[0_20px_50px_rgba(0,0,0,0.16)] sm:px-8 sm:py-10">
         <div className="flex flex-col items-center text-center">
-          <div className="h-20 w-20 rounded-full bg-white border border-gray-200 flex items-center justify-center overflow-hidden shadow-sm">
+          <div className="h-30 w-30 rounded-full bg-white border border-gray-200 flex items-center justify-center overflow-hidden shadow-sm">
             <img
               src="/images/City_of_Taguig_logo.png"
               alt="City of Taguig logo"
-              className="h-16 w-16 object-contain"
+              className="h-20 w-20 object-contain"
             />
           </div>
 
           <p className="mt-5 text-xs font-semibold uppercase tracking-[0.35em] text-gray-500">
-            City Government of Taguig
+            City of Taguig
           </p>
           <h1 className="mt-2 text-2xl font-black tracking-tight text-black">
             CCTV Department
           </h1>
           <p className="mt-2 text-sm text-gray-600">
-            Job Order Dispatching and Monitoring System
+            Inventory and Dispatching System
           </p>
         </div>
 

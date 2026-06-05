@@ -1,8 +1,11 @@
 # TODO
 
-- [ ] Add Supabase Realtime subscription to `frontend/pages/inventory/index.js` for `public.inventory_items` changes (event: '*'), calling `loadItems()` on any change.
-- [ ] Add cleanup in the same `useEffect` to call `supabase.removeChannel(channel)`.
-- [ ] Add Supabase Realtime subscription to `frontend/components/dashboard/InventoryDashboard.jsx` for `public.inventory_items` changes, re-fetching counts + low-stock items.
-- [ ] Add cleanup in the dashboard `useEffect` to call `supabase.removeChannel(channel)`.
-- [ ] Verify no lint/build errors; confirm realtime updates work on stock changes.
+- [ ] Add client-side CSV export button on `frontend/pages/inventory/index.js` next to "Add New Item".
+- [ ] Implement `exportToCSV(rows, filename)` helper with proper CSV escaping (wrap values in double quotes; escape internal quotes).
+- [ ] Export filtered table rows with columns: Item Name, Unit, Current Stock, Min Stock, Status.
+- [ ] Filename: `inventory-report-{date}.csv` (date = YYYY-MM-DD).
+- [ ] Add client-side CSV export button on `frontend/pages/inventory/[id].js` within the Transaction History section.
+- [ ] Export transaction rows already loaded on the page with columns: Date, Type, Quantity, JO No., Remarks, Performed By.
+- [ ] Filename: `inventory-history-{item_name}-{date}.csv` (item_name sanitized for filesystem).
+- [ ] Manual sanity check: verify button placement, header names, quoting/commas, and that download triggers without API changes.
 

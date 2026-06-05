@@ -6,6 +6,39 @@ import { useAuth } from '../../context/AuthContext'
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || ''
 
+const exportToCSV = (rows, filename) => {
+  if (!rows || rows.length === 0) return
+
+  const escapeCell = (value) => {
+    const str = value === null || value === undefined ? '' : String(value)
+    return `"${str.replace(/"/g, '""')}"`
+  }
+
+  const headers = Object.keys(rows[0])
+  const csv = [
+    headers.map(escapeCell).join(','),
+    ...rows.map((row) => headers.map((h) => escapeCell(row[h])).join(',')),
+  ].join('\n')
+
+  const blob = new Blob([csv], { type: 'text/csv' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+const sanitizeFilenamePart = (value) => {
+  const str = value === null || value === undefined ? '' : String(value)
+  return str
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-zA-Z0-9-_]/g, '')
+    .slice(0, 80)
+}
+
+
 export default function InventoryItemPage() {
   const { session } = useAuth()
   const router = useRouter()
@@ -52,7 +85,38 @@ export default function InventoryItemPage() {
           </section>
 
           <section className="rounded-[24px] border border-gray-200 bg-white p-5 shadow-sm">
-            <h3 className="text-lg font-semibold mb-3">Transaction History</h3>
+            <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <h3 className="text-lg font-semibold">Transaction History</h3>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const date = new Date().toISOString().slice(0, 10)
+                  const itemName = sanitizeFilenamePart(item?.item_name || 'item') || 'item'
+
+                  const rows = txs.map((t) => {
+                    const type = t.transaction_type === 'stock_in' ? 'Stock In' : 'Stock Out'
+                    const qty = t.transaction_type === 'stock_in' ? `+${t.quantity}` : `-${t.quantity}`
+
+                    return {
+                      Date: new Date(t.created_at).toLocaleString(),
+                      Type: type,
+                      Quantity: qty,
+                      'JO No.': t.job_order?.jo_number || '—',
+                      Remarks: t.remarks || '—',
+                      'Performed By': t.performed_by_user?.name || '—',
+                    }
+                  })
+
+                  exportToCSV(rows, `inventory-history-${itemName}-${date}.csv`)
+                }}
+                className="self-start rounded-2xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-gray-50 disabled:opacity-60"
+                disabled={txs.length === 0 || loading}
+              >
+                Export CSV
+              </button>
+            </div>
+
             <div className="overflow-x-auto">
               <table className="min-w-full text-left text-sm">
                 <thead className="bg-[#FFF0F0] text-gray-700">

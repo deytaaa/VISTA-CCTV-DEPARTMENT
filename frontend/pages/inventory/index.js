@@ -37,6 +37,30 @@ function emptyItemForm() {
   }
 }
 
+const exportToCSV = (rows, filename) => {
+  if (!rows || rows.length === 0) return
+
+  const escapeCell = (value) => {
+    const str = value === null || value === undefined ? '' : String(value)
+    return `"${str.replace(/"/g, '""')}"`
+  }
+
+  const headers = Object.keys(rows[0])
+  const csvRows = [
+    headers.map(escapeCell).join(','),
+    ...rows.map((row) => headers.map((h) => escapeCell(row[h])).join(',')),
+  ]
+    .join('\n')
+
+  const blob = new Blob([csvRows], { type: 'text/csv' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 export default function InventoryPage() {
   const { session, user } = useAuth()
   const [items, setItems] = useState([])
@@ -245,10 +269,23 @@ export default function InventoryPage() {
     }
   }
 
+  const date = new Date().toISOString().slice(0, 10)
+  const exportRowsForFiltered = filteredItems.map((item) => {
+    const statusInfo = getStatusInfo(item)
+    return {
+      'Item Name': item.item_name,
+      Unit: item.unit,
+      'Current Stock': Number(item.current_stock || 0),
+      'Min Stock': Number(item.minimum_stock || 0),
+      Status: statusInfo.label,
+    }
+  })
+
   return (
     <ProtectedRoute allowedRoles={['inventory']}>
       <Layout title="Inventory" subtitle="Inventory Management">
         <div className="mx-auto max-w-6xl space-y-6">
+
           {toast ? (
             <div className={`rounded-2xl border px-4 py-3 text-sm font-medium ${toast.type === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-red-200 bg-red-50 text-red-700'}`}>
               {toast.message}
@@ -278,9 +315,22 @@ export default function InventoryPage() {
               </div>
             </div>
 
-            <button type="button" onClick={openCreateModal} className="rounded-2xl bg-taguigRed px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-red-900/10 hover:bg-taguigDark">
-              Add New Item
-            </button>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  exportToCSV(exportRowsForFiltered, `inventory-report-${date}.csv`)
+                }}
+                className="rounded-2xl border border-gray-200 bg-white px-5 py-3 text-sm font-semibold text-black hover:bg-gray-50"
+                disabled={filteredItems.length === 0}
+              >
+                Export CSV
+              </button>
+
+              <button type="button" onClick={openCreateModal} className="rounded-2xl bg-taguigRed px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-red-900/10 hover:bg-taguigDark">
+                Add New Item
+              </button>
+            </div>
           </div>
 
           {lowStockItems.length > 0 ? (
