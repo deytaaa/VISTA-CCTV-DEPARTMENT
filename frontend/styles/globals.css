@@ -4,3 +4,53 @@
 
 html, body, #__next { height: 100%; }
 body { font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial; }
+
+/* Tablet layout fix for Inventory toolbar (768px - 1024px) */
+@media (max-width: 1024px) {
+  .inventory-toolbar {
+    /* prevent any horizontal overflow */
+    overflow-x: hidden;
+  }
+
+  .inventory-toolbar-row1,
+  .inventory-toolbar-row2 {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .inventory-toolbar-row1 {
+    /* exactly two columns on tablet */
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 12px;
+  }
+
+  .inventory-toolbar-row1 > div {
+    min-width: 0;
+    flex: 1 1 0;
+  }
+
+  .inventory-toolbar-row2 {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: nowrap;
+    gap: 12px;
+  }
+
+  .inventory-toolbar-row2 > div {
+    min-width: 0;
+  }
+
+  /* Ensure right-side actions don't wrap */
+  .inventory-toolbar-row2 .flex-nowrap {
+    flex-wrap: nowrap;
+  }
+
+  /* Inputs/selects should not overflow */
+  .inventory-toolbar-row1 input,
+  .inventory-toolbar-row1 select {
+    max-width: 100%;
+  }
+}
+

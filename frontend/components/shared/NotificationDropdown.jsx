@@ -126,13 +126,26 @@ export default function NotificationDropdown() {
     const target = items.find((item) => item.id === notificationId)
     const wasUnread = Boolean(target && !target.is_read)
 
+    // Optimistic update
     setItems((current) => current.filter((item) => item.id !== notificationId))
     if (wasUnread) {
       setUnreadCount((current) => Math.max(0, current - 1))
     }
 
-    await supabase.from('notifications').delete().eq('id', notificationId).eq('user_id', user.id)
+    const { error } = await supabase
+      .from('notifications')
+      .delete()
+      .eq('id', notificationId)
+      .eq('user_id', user.id)
+
+    if (error) {
+      console.error('Failed to delete notification:', error)
+      // Revert optimistic UI (best-effort) and re-fetch from DB
+      await loadNotifications()
+      return
+    }
   }
+
 
   useEffect(() => {
     loadNotifications()

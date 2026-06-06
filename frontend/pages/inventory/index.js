@@ -292,13 +292,15 @@ export default function InventoryPage() {
             </div>
           ) : null}
 
-          <div className="flex flex-col gap-4 rounded-[28px] border border-gray-200 bg-white p-5 shadow-sm lg:flex-row lg:items-end lg:justify-between">
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1.5fr_180px_auto] lg:items-end">
-              <div>
+          <div className="inventory-toolbar rounded-[28px] border border-gray-200 bg-white p-5 shadow-sm">
+            {/* Row 1 (tablet): Search + Status side-by-side, full width */}
+            <div className="inventory-toolbar-row1 flex flex-col gap-3 md:flex-row md:items-end md:justify-between md:gap-4">
+              <div className="min-w-0 flex-1">
                 <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Search</label>
                 <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search item name..." className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-black" />
               </div>
-              <div>
+
+              <div className="min-w-0 flex-1">
                 <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Status</label>
                 <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-black">
                   {STATUS_OPTIONS.map((option) => (
@@ -308,28 +310,32 @@ export default function InventoryPage() {
                   ))}
                 </select>
               </div>
-              <div className="flex gap-2">
-                <button type="button" onClick={() => { setSearch(''); setStatusFilter('all') }} className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-semibold text-black hover:bg-gray-50">
+            </div>
+
+            {/* Row 2 (tablet): Clear left; Export + Add right */}
+            <div className="inventory-toolbar-row2 mt-4 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={() => { setSearch(''); setStatusFilter('all') }} className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-semibold text-black hover:bg-gray-50 whitespace-nowrap">
                   Clear Filters
                 </button>
               </div>
-            </div>
 
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => {
-                  exportToCSV(exportRowsForFiltered, `inventory-report-${date}.csv`)
-                }}
-                className="rounded-2xl border border-gray-200 bg-white px-5 py-3 text-sm font-semibold text-black hover:bg-gray-50"
-                disabled={filteredItems.length === 0}
-              >
-                Export CSV
-              </button>
+              <div className="flex items-center gap-3 flex-nowrap">
+                <button
+                  type="button"
+                  onClick={() => {
+                    exportToCSV(exportRowsForFiltered, `inventory-report-${date}.csv`)
+                  }}
+                  className="rounded-2xl border border-gray-200 bg-white px-5 py-3 text-sm font-semibold text-black hover:bg-gray-50 whitespace-nowrap"
+                  disabled={filteredItems.length === 0}
+                >
+                  Export CSV
+                </button>
 
-              <button type="button" onClick={openCreateModal} className="rounded-2xl bg-taguigRed px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-red-900/10 hover:bg-taguigDark">
-                Add New Item
-              </button>
+                <button type="button" onClick={openCreateModal} className="rounded-2xl bg-taguigRed px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-red-900/10 hover:bg-taguigDark whitespace-nowrap">
+                  Add New Item
+                </button>
+              </div>
             </div>
           </div>
 
