@@ -1,9 +1,12 @@
-## Technician My Job Orders table mobile layout fix
+- [x] Confirm create-jo.js already fetches GET /api/users/technicians
+- [x] Inspect current backend users routes (backend/routes/users.js)
+- [x] Add GET /api/users/technicians route before any dynamic /:id route
 
-- [ ] Replace the hidden Actions column on mobile with a single icon button (⋯) per row.
-- [ ] Add a small dropdown menu per row that includes the existing technician actions (View, Download PDF, and context actions like Upload Proof / Mark as Processing / Submit for Approval).
-- [ ] Ensure the dropdown is accessible (button has aria-label; menu closes after click; click-outside closes).
-- [ ] Keep desktop behavior unchanged.
-- [ ] Update page/table styles so the Actions column remains visible on small screens without horizontal scroll.
-- [ ] Verify TechnicianDashboard "Assigned Work" table is not affected (or apply same pattern there if needed).
+- [x] Implement controller/logic to return users where role='technician'
+
+- [x] Ensure response shape: { data: [{ id, name, email }, ...] }
+
+- [x] Keep admin-only access via authMiddleware + isAdmin
+
+
 

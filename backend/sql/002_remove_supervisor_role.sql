@@ -5,7 +5,7 @@ update public.users
 set role = 'technician'
 where role::text = 'supervisor';
 
-create type public.user_role_new as enum ('admin', 'technician');
+create type public.user_role_new as enum ('admin', 'technician', 'inventory');
 
 alter table public.users
   alter column role drop default,

@@ -3,7 +3,13 @@
 DO $$
 BEGIN
   -- Add new enum value if it doesn't exist
-  IF NOT EXISTS (SELECT 1 FROM pg_type t JOIN pg_enum e ON t.oid = e.enumtypid WHERE t.typname = 'user_role' AND e.enumlabel = 'inventory') THEN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_type t
+    JOIN pg_enum e ON t.oid = e.enumtypid
+    WHERE t.typname = 'user_role'
+      AND e.enumlabel = 'inventory'
+  ) THEN
     ALTER TYPE public.user_role ADD VALUE 'inventory';
   END IF;
 END$$;

@@ -96,6 +96,19 @@ function InventoryIcon() {
   )
 }
 
+function UsersIcon() {
+  return (
+    <IconWrapper>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-5 w-5">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+        <circle cx="8.5" cy="7" r="4" strokeWidth="2" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 8v6" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M23 11h-6" />
+      </svg>
+    </IconWrapper>
+  )
+}
+
 const iconByHref = {
   '/dashboard': DashboardIcon,
   '/jo/create': CreateIcon,
@@ -105,7 +118,9 @@ const iconByHref = {
   '/jo/archive': ArchiveIcon,
   '/logs': LogsIcon,
   '/inventory': InventoryIcon,
+  '/users': UsersIcon,
 }
+
 
 
 export default function Sidebar({ hidden = false, setHidden = () => {}, mobileOpen = false, setMobileOpen = () => {} }) {
@@ -123,6 +138,7 @@ export default function Sidebar({ hidden = false, setHidden = () => {}, mobileOp
       { href: '/jo/archive', label: 'Archive', roles: ['admin'] },
       { href: '/logs', label: 'Activity Logs', roles: ['admin'] },
       { href: '/inventory', label: 'Inventory', roles: ['inventory'] },
+      { href: '/users', label: 'User Management', roles: ['admin'] },
     ],
     []
   )

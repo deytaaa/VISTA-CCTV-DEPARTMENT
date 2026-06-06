@@ -4,7 +4,7 @@
 create extension if not exists pgcrypto;
 
 -- Enums
-create type public.user_role as enum ('admin', 'technician');
+create type public.user_role as enum ('admin', 'technician', 'inventory');
 create type public.jo_status as enum (
   'draft',
   'sent',
