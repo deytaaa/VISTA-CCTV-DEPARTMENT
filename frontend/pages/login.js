@@ -23,14 +23,15 @@ export default function Login() {
     }
   }, [authLoading, isAuthenticated, router])
 
+
   async function handleSubmit(e) {
     e.preventDefault()
     setError(null)
     setLoading(true)
 
-    // Wait for Supabase session to be fully established before redirecting
+    // Wait for Supabase auth session to be fully established before redirecting.
+    // Additionally wait for AuthContext's `loading` to finish to avoid route-fetch aborts.
     const waitForSession = async () => {
-      // If we already have a session (or Supabase has set it synchronously), return it.
       const { data: current } = await supabase.auth.getSession()
       if (current?.session) return current.session
 
@@ -43,7 +44,6 @@ export default function Login() {
           }
         })
 
-        // Safety timeout to avoid hanging forever
         setTimeout(() => {
           subscription?.data?.subscription?.unsubscribe?.()
           subscription?.unsubscribe?.()
@@ -51,6 +51,30 @@ export default function Login() {
         }, 5000)
       })
     }
+
+    const waitForAuthContext = async () => {
+      // AuthContext uses `loading` to indicate it has synced session/profile.
+      const start = Date.now()
+      const timeoutMs = 7000
+
+      return new Promise((resolve) => {
+        const tick = () => {
+          // `authLoading` and `isAuthenticated` come from hook state; polling ensures we wait for them.
+          if (!authLoading && isAuthenticated) {
+            resolve(true)
+            return
+          }
+          if (Date.now() - start > timeoutMs) {
+            resolve(false)
+            return
+          }
+          setTimeout(tick, 100)
+        }
+
+        tick()
+      })
+    }
+
 
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
 
@@ -83,7 +107,12 @@ export default function Login() {
     // Ensure session is ready before navigating to /dashboard
     await waitForSession()
 
+    // Wait for AuthContext to finish syncing before navigating.
+    // Show spinner while waiting.
+    await waitForAuthContext()
+
     router.replace(getNextPath())
+
   }
 
   if (authLoading || isAuthenticated) {
