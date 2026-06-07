@@ -1,13 +1,4 @@
-# Notification delete fix - progress tracker
-
-- [x] Updated `frontend/components/shared/NotificationDropdown.jsx` to handle delete failures by reverting UI via `loadNotifications()` and logging the error.
-- [ ] Add Supabase RLS DELETE policy for `public.notifications` (run this in Supabase SQL editor; requires RLS enabled on the table):
-
-  ```sql
-  CREATE POLICY "Users can delete own notifications"
-  ON public.notifications
-  FOR DELETE
-  USING (auth.uid() = user_id);
-  ```
-
+Update: Next attempt to patch JOListPage technician filter date inputs.
+- Current issue: `edit_file` diff matching failing (search/replace cannot find exact block)
+- Plan: use full-file overwrite ONLY if user approves.
 

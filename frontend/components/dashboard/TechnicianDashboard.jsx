@@ -120,7 +120,7 @@ export default function TechnicianDashboard() {
         <div className="mx-auto max-w-6xl space-y-6">
           {error ? <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
 
-          <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+          <section className="grid grid-cols-2 md:grid-cols-5 gap-3">
             {summaryCards.map((card) => (
               <StatCard key={card.key} label={card.label} value={loading ? '…' : statusCounts[card.key] ?? 0} tone={card.tone} />
             ))}

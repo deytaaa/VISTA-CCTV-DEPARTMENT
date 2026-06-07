@@ -1027,7 +1027,7 @@ export default function JOListPage({
                         type="date"
                         value={dateToInput}
                         onChange={(e) => setDateToInput(e.target.value)}
-                        className="w-full rounded-2xl border-[1.5px] border-[#cbd5e1] bg-[#f8fafc] px-4 py-3 text-sm outline-none focus:border-black"
+                        className="w-full rounded-2xl border-[1.5px] border-[#cbd5e1] bg-[#f8fafc] px-4 py-3 text-sm outline-none placeholder:text-gray-400 focus:border-black"
                       />
                     </label>
 
@@ -1055,8 +1055,8 @@ export default function JOListPage({
               </>
             ) : filterLayout === 'technician' ? (
               <>
-                <div className="grid gap-3">
-                  <label className="block">
+                <div className="flex flex-col gap-3 md:flex-row md:items-end md:gap-3">
+                  <label className="block flex-1">
                     <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Search JO No. / Location</span>
                     <input
                       value={searchInput}
@@ -1066,8 +1066,8 @@ export default function JOListPage({
                     />
                   </label>
 
-                  <div className="grid gap-3 md:grid-cols-3">
-                    <label className="block">
+                  <div className="grid grid-cols-2 gap-2 md:contents">
+                    <label className="block flex-1">
                       <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Date From</span>
                       <input
                         type="date"
@@ -1077,40 +1077,41 @@ export default function JOListPage({
                       />
                     </label>
 
-                    <label className="block">
+                    <label className="block flex-1">
                       <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Date To</span>
                       <input
                         type="date"
                         value={dateToInput}
                         onChange={(e) => setDateToInput(e.target.value)}
-                        className="w-full rounded-2xl border-[1.5px] border-[#cbd5e1] bg-[#f8fafc] px-4 py-3 text-sm outline-none focus:border-black"
+                        className="w-full rounded-2xl border-[1.5px] border-[#cbd5e1] bg-[#f8fafc] px-4 py-3 text-sm outline-none placeholder:text-gray-400 focus:border-black"
                       />
                     </label>
-
-                    {showStatusFilter ? (
-                      <label className="block">
-                        <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Status</span>
-                        <select
-                          value={statusFilter}
-                          onChange={(e) => setStatusFilter(e.target.value)}
-                          className="w-full rounded-2xl border-[1.5px] border-[#cbd5e1] bg-[#f8fafc] px-4 py-3 text-sm outline-none focus:border-black"
-                        >
-                          {statusOptions.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    ) : lockedStatus ? (
-                      <div className="block">
-                        <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Status</span>
-                        <div className="flex h-[50px] items-center rounded-2xl border border-gray-200 bg-gray-50 px-4 text-sm font-semibold text-emerald-700">
-                          Approved
-                        </div>
-                      </div>
-                    ) : null}
                   </div>
+
+
+                  {showStatusFilter ? (
+                    <label className="block flex-1">
+                      <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Status</span>
+                      <select
+                        value={statusFilter}
+                        onChange={(e) => setStatusFilter(e.target.value)}
+                        className="w-full rounded-2xl border-[1.5px] border-[#cbd5e1] bg-[#f8fafc] px-4 py-3 text-sm outline-none focus:border-black"
+                      >
+                        {statusOptions.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : lockedStatus ? (
+                    <div className="block flex-1">
+                      <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Status</span>
+                      <div className="flex h-[50px] items-center rounded-2xl border border-gray-200 bg-gray-50 px-4 text-sm font-semibold text-emerald-700">
+                        Approved
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className="mt-4 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
@@ -1159,7 +1160,7 @@ export default function JOListPage({
                           type="date"
                           value={dateToInput}
                           onChange={(e) => setDateToInput(e.target.value)}
-                          className="w-full rounded-2xl border-[1.5px] border-[#cbd5e1] bg-[#f8fafc] px-4 py-3 text-sm outline-none focus:border-black"
+                          className="w-full rounded-2xl border-[1.5px] border-[#cbd5e1] bg-[#f8fafc] px-4 py-3 text-sm outline-none placeholder:text-gray-400 focus:border-black"
                         />
                       </label>
                     </div>
@@ -1215,7 +1216,8 @@ export default function JOListPage({
                 <EmptyState title={emptyTitle} description={emptyDescription} />
               ) : (
                 <>
-                  <div className="overflow-x-auto">
+                  {/* Desktop Table */}
+                  <div className="hidden md:block overflow-x-auto">
                     <table className="w-full min-w-[780px] table-fixed text-left text-sm">
                       {isTechnicianView ? (
                         <colgroup>
@@ -1319,6 +1321,49 @@ export default function JOListPage({
                     </table>
                   </div>
 
+                  {/* Mobile Card List */}
+                  <div className="md:hidden space-y-3">
+                    {rows.map((row) => {
+                      const status = (row.status || '').toLowerCase()
+                      const isDraft = status === 'draft'
+
+                      return (
+                        <div key={row.id} className="rounded-3xl border border-gray-200 bg-white p-4 shadow-sm">
+                          {/* Top row: JO No. + Status */}
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="text-sm font-bold text-black">{isDraft ? '—' : row.jo_number || '—'}</div>
+                            </div>
+                            <JOStatusBadge status={row.status} technicianView={isTechnicianView} />
+                          </div>
+
+                          {/* Second row: Location */}
+                          <div className="mt-2">
+                            <div className="text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Location</div>
+                            <div className="mt-1 truncate text-sm font-medium text-gray-700">{row.location || '—'}</div>
+                          </div>
+
+                          {/* Third row: Date */}
+                          <div className="mt-2">
+                            <div className="text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Date</div>
+                            <div className="mt-1 text-sm font-medium text-gray-700">{formatDate(row.date)}</div>
+                          </div>
+
+                          {/* Bottom row: View + ⋯ dropdown */}
+                          <div className="mt-4 flex items-center justify-between gap-3">
+                            <TableButton href={`/jo/${row.id}`} target="_blank" rel="noreferrer" tone="default">
+                              View
+                            </TableButton>
+
+                            {isTechnicianView ? (
+                              <TechnicianRowActionsMobile row={row} />
+                            ) : null}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+
                   <div className="mt-5 flex flex-col gap-3 border-t border-gray-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
                     <p className="text-sm text-gray-500">
                       Page {page} of {totalPages}
@@ -1349,7 +1394,7 @@ export default function JOListPage({
 
           {proofJobOrder ? (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6">
-              <div className="w-full max-w-lg rounded-[24px] bg-white p-6 shadow-2xl">
+<div className="w-full max-w-lg rounded-[24px] bg-white p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
                 <div className="mb-4 flex items-start justify-between gap-4">
                   <div>
                     <h3 className="text-lg font-bold text-black">{(proofJobOrder.status || '').toLowerCase() === 'rejected' ? 'Re-upload Proof' : 'Upload Proof'}</h3>
@@ -1388,7 +1433,7 @@ export default function JOListPage({
                     <div className="rounded-2xl border border-gray-200 bg-white p-4">
                       {proofPreview.type === 'image' ? (
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                          <img src={proofPreview.url} alt="Proof preview" className="h-20 w-20 rounded-xl border border-gray-200 object-cover" />
+<img src={proofPreview.url} alt="Proof preview" className="max-h-32 w-20 rounded-xl border border-gray-200 object-cover" />
                           <div className="flex-1">
                             <p className="text-sm font-semibold text-black">Image Preview</p>
                             <p className="text-sm text-gray-500">{proofPreview.name}</p>
@@ -1435,7 +1480,7 @@ export default function JOListPage({
                     Cancel
                   </button>
                   <button type="button" onClick={submitProof} disabled={proofLoading} className="rounded-2xl bg-taguigRed px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">
-                    {proofLoading ? 'Uploading...' : (proofJobOrder && (proofJobOrder.status || '').toLowerCase() === 'rejected' ? 'Re-upload' : 'Save Proof')}
+                    {proofLoading ? 'Uploading...' : proofJobOrder && (proofJobOrder.status || '').toLowerCase() === 'rejected' ? 'Re-upload' : 'Save Proof'}
                   </button>
                 </div>
               </div>
@@ -1498,3 +1543,4 @@ export default function JOListPage({
     </ProtectedRoute>
   )
 }
+
