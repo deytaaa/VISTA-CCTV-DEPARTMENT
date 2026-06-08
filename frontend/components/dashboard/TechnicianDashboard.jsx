@@ -137,7 +137,8 @@ export default function TechnicianDashboard() {
               </Link>
             </div>
 
-            <div className="overflow-x-auto">
+            {/* Desktop Table */}
+            <div className="hidden overflow-x-auto md:block">
               <table className="w-full min-w-[760px] table-fixed text-left text-sm">
                 <colgroup>
                   <col className="w-[18%]" />
@@ -174,9 +175,16 @@ export default function TechnicianDashboard() {
                         <td className="px-4 py-3 font-medium text-black">{row.jo_number || 'TBD'}</td>
                         <td className="px-4 py-3 text-gray-700">{row.location || '—'}</td>
                         <td className="px-4 py-3 text-gray-700">{formatDate(row.date)}</td>
-                        <td className="px-4 py-3 text-gray-700"><JOStatusBadge status={row.status} technicianView /></td>
                         <td className="px-4 py-3 text-gray-700">
-                          <Link href={`/jo/${row.id}`} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-black transition hover:bg-gray-50">
+                          <JOStatusBadge status={row.status} technicianView />
+                        </td>
+                        <td className="px-4 py-3 text-gray-700">
+                          <Link
+                            href={`/jo/${row.id}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-black transition hover:bg-gray-50"
+                          >
                             View
                           </Link>
                         </td>
@@ -185,6 +193,51 @@ export default function TechnicianDashboard() {
                   )}
                 </tbody>
               </table>
+            </div>
+
+            {/* Mobile Card List */}
+            <div className="md:hidden space-y-3">
+              {loading ? null : rows.length === 0 ? (
+                <div className="rounded-3xl border border-gray-200 bg-white p-6 text-center text-sm font-semibold text-gray-600 shadow-sm">
+                  No assigned job orders yet.
+                </div>
+              ) : (
+                rows.map((row) => (
+                  <div key={row.id} className="rounded-3xl border border-gray-200 bg-white p-4 shadow-sm">
+                    {/* Top row: JO No. + Status */}
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-sm font-bold text-black">{row.jo_number || 'TBD'}</div>
+                      </div>
+                      <JOStatusBadge status={row.status} technicianView />
+                    </div>
+
+                    {/* Second row: Location */}
+                    <div className="mt-2">
+                      <div className="text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Location</div>
+                      <div className="mt-1 truncate text-sm font-medium text-gray-700">{row.location || '—'}</div>
+                    </div>
+
+                    {/* Third row: Date */}
+                    <div className="mt-2">
+                      <div className="text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Date</div>
+                      <div className="mt-1 text-sm font-medium text-gray-700">{formatDate(row.date)}</div>
+                    </div>
+
+                    {/* Bottom row: View button */}
+                    <div className="mt-4">
+                      <Link
+                        href={`/jo/${row.id}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex w-full items-center justify-center rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-black transition hover:bg-gray-50"
+                      >
+                        View
+                      </Link>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </section>
         </div>

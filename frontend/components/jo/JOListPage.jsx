@@ -1011,25 +1011,27 @@ export default function JOListPage({
                   </label>
 
                   <div className="grid gap-3 md:grid-cols-3">
-                    <label className="block">
-                      <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Date From</span>
-                      <input
-                        type="date"
-                        value={dateFromInput}
-                        onChange={(e) => setDateFromInput(e.target.value)}
-                        className="w-full rounded-2xl border-[1.5px] border-[#cbd5e1] bg-[#f8fafc] px-4 py-3 text-sm outline-none placeholder:text-gray-400 focus:border-black"
-                      />
-                    </label>
+                    <div className="grid grid-cols-2 gap-2 md:contents">
+                      <label className="block">
+                        <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Date From</span>
+                        <input
+                          type="date"
+                          value={dateFromInput}
+                          onChange={(e) => setDateFromInput(e.target.value)}
+                          className="w-full rounded-2xl border-[1.5px] border-[#cbd5e1] bg-[#f8fafc] px-4 py-3 text-sm outline-none placeholder:text-gray-400 focus:border-black"
+                        />
+                      </label>
 
-                    <label className="block">
-                      <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Date To</span>
-                      <input
-                        type="date"
-                        value={dateToInput}
-                        onChange={(e) => setDateToInput(e.target.value)}
-                        className="w-full rounded-2xl border-[1.5px] border-[#cbd5e1] bg-[#f8fafc] px-4 py-3 text-sm outline-none placeholder:text-gray-400 focus:border-black"
-                      />
-                    </label>
+                      <label className="block">
+                        <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Date To</span>
+                        <input
+                          type="date"
+                          value={dateToInput}
+                          onChange={(e) => setDateToInput(e.target.value)}
+                          className="w-full rounded-2xl border-[1.5px] border-[#cbd5e1] bg-[#f8fafc] px-4 py-3 text-sm outline-none placeholder:text-gray-400 focus:border-black"
+                        />
+                      </label>
+                    </div>
 
                     <div className="block">
                       <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Status</span>
