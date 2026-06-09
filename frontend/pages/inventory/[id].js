@@ -57,7 +57,7 @@ export default function InventoryItemPage() {
     async function load() {
       setLoading(true)
       try {
-        const res = await fetch(`${API_BASE_URL}/api/inventory/${id}`, {
+        const res = await fetch(`${API_BASE_URL}/api/inventory/items/${id}`, {
           headers: { Authorization: `Bearer ${session.access_token}` },
         })
         const payload = await res.json()

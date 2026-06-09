@@ -10,16 +10,22 @@ const inventoryWriteAccess = requireAnyRole(['inventory'])
 // Read-only access for admins/inventory (used by JO creation dropdown)
 router.get('/', authMiddleware, inventoryReadAccess, inventory.list)
 router.get('/items', authMiddleware, inventoryReadAccess, inventory.list)
-router.get('/:id', authMiddleware, inventoryReadAccess, inventory.getById)
+router.get('/items/:id', authMiddleware, inventoryReadAccess, inventory.getById)
+
 
 // Keep stock/inventory management restricted to inventory role only
+// NOTE: Route must be defined before '/:id' dynamic reads to avoid conflicts.
 router.post('/', authMiddleware, inventoryWriteAccess, inventory.create)
 router.put('/:id', authMiddleware, inventoryWriteAccess, inventory.update)
 router.delete('/:id', authMiddleware, inventoryWriteAccess, inventory.remove)
+router.post('/items/:id/stock-out', authMiddleware, inventoryWriteAccess, inventory.stockOut)
 router.post('/:id/stock', authMiddleware, inventoryWriteAccess, inventory.addStock)
+
+
 
 // Preview usage should remain restricted (can disclose availability/transactions)
 router.post('/preview-usage', authMiddleware, requireAnyRole(['admin', 'inventory']), inventory.previewUsage)
+
 
 module.exports = router
 

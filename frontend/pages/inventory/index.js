@@ -78,6 +78,13 @@ export default function InventoryPage() {
   const [stockRemarks, setStockRemarks] = useState('New delivery from supplier')
   const [stockLoading, setStockLoading] = useState(false)
 
+  const [stockOutModalItem, setStockOutModalItem] = useState(null)
+  const [stockOutQuantity, setStockOutQuantity] = useState('')
+  const [stockOutReason, setStockOutReason] = useState('Damaged')
+  const [stockOutRemarks, setStockOutRemarks] = useState('')
+  const [stockOutLoading, setStockOutLoading] = useState(false)
+
+
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleteLoading, setDeleteLoading] = useState(false)
 
@@ -178,6 +185,14 @@ export default function InventoryPage() {
     setStockRemarks('New delivery from supplier')
   }
 
+  function openStockOutModal(item) {
+    setStockOutModalItem(item)
+    setStockOutQuantity('')
+    setStockOutReason('Damaged')
+    setStockOutRemarks('')
+  }
+
+
   async function saveItem() {
     if (!itemForm.item_name.trim() || !itemForm.unit) {
       setToast({ type: 'error', message: 'Item name and unit are required.' })
@@ -245,6 +260,61 @@ export default function InventoryPage() {
       setStockLoading(false)
     }
   }
+
+  async function saveStockOut() {
+    const qty = Number(stockOutQuantity || 0)
+    if (!stockOutModalItem) return
+
+    const currentStock = Number(stockOutModalItem.current_stock || 0)
+    const unit = stockOutModalItem.unit || ''
+
+    if (!stockOutReason) {
+      setToast({ type: 'error', message: 'Reason is required' })
+      return
+    }
+
+    if (!qty || qty <= 0) {
+      setToast({ type: 'error', message: 'Enter a valid quantity to use.' })
+      return
+    }
+
+    if (qty > currentStock) {
+      setToast({ type: 'error', message: 'Insufficient stock' })
+      return
+    }
+
+    setStockOutLoading(true)
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/inventory/items/${stockOutModalItem.id}/stock-out`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
+        body: JSON.stringify({
+          quantity: qty,
+          reason: stockOutReason,
+          remarks: stockOutRemarks.trim(),
+        }),
+      })
+
+      const payload = await response.json()
+      if (!response.ok) throw new Error(payload?.error || 'Failed to update stock')
+
+      const updatedItem = payload?.data?.item
+      const newStock = Number(updatedItem?.current_stock ?? currentStock - qty)
+
+      setToast({
+        type: 'success',
+        message: `Stock updated. ${updatedItem?.item_name || stockOutModalItem.item_name} now has ${newStock} ${updatedItem?.unit || unit} remaining.`,
+      })
+
+      setStockOutModalItem(null)
+      await loadItems()
+    } catch (error) {
+      setToast({ type: 'error', message: error.message })
+    } finally {
+      setStockOutLoading(false)
+    }
+  }
+
 
   async function deleteItem() {
     if (!deleteTarget) return
@@ -392,6 +462,10 @@ export default function InventoryPage() {
                               <button type="button" onClick={() => openStockModal(item)} className="rounded-2xl border border-gray-200 px-3 py-2 text-xs font-semibold text-black hover:bg-gray-50">
                                 + Add Stock
                               </button>
+                              <button type="button" onClick={() => openStockOutModal(item)} className="rounded-2xl border border-gray-200 px-3 py-2 text-xs font-semibold text-black hover:bg-gray-50">
+                                - Use Stock
+                              </button>
+
                               <button type="button" onClick={() => openEditModal(item)} className="rounded-2xl border border-gray-200 px-3 py-2 text-xs font-semibold text-black hover:bg-gray-50">
                                 Edit
                               </button>
@@ -509,6 +583,75 @@ export default function InventoryPage() {
             </div>
           </div>
         ) : null}
+
+        {stockOutModalItem ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+            <div className="w-full max-w-xl rounded-[28px] bg-white p-6 shadow-2xl">
+              <div className="mb-5 flex items-start justify-between gap-4">
+                <div>
+                  <h3 className="text-xl font-black text-black">Stock Out</h3>
+                  <p className="text-sm text-gray-500">Deduct stock for {stockOutModalItem.item_name}.</p>
+                </div>
+                <button type="button" onClick={() => setStockOutModalItem(null)} className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold">Close</button>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Item Name</label>
+                  <input value={stockOutModalItem.item_name} readOnly className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none" />
+                </div>
+                <div>
+                  <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Current Stock</label>
+                  <input value={stockOutModalItem.current_stock} readOnly className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none" />
+                </div>
+                <div>
+                  <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Quantity to Deduct</label>
+                  <input
+                    type="number"
+                    min="1"
+                    required
+                    value={stockOutQuantity}
+                    onChange={(e) => setStockOutQuantity(e.target.value)}
+                    className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-black"
+                  />
+                </div>
+                <div>
+                  <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Reason</label>
+                  <select
+                    value={stockOutReason}
+                    onChange={(e) => setStockOutReason(e.target.value)}
+                    className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-black"
+                  >
+                    {['Damaged', 'Lost', 'Expired', 'Returned', 'Other'].map((r) => (
+                      <option key={r} value={r}>
+                        {r}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Remarks</label>
+                  <input
+                    value={stockOutRemarks}
+                    onChange={(e) => setStockOutRemarks(e.target.value)}
+                    className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-black"
+                  />
+                </div>
+              </div>
+
+
+              <div className="mt-6 flex justify-end gap-3">
+                <button type="button" onClick={() => setStockOutModalItem(null)} className="rounded-2xl border border-gray-200 px-5 py-3 text-sm font-semibold text-black hover:bg-gray-50">
+                  Cancel
+                </button>
+                <button type="button" onClick={saveStockOut} disabled={stockOutLoading} className="rounded-2xl bg-taguigRed px-5 py-3 text-sm font-semibold text-white hover:bg-taguigDark disabled:opacity-60">
+                  {stockOutLoading ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
 
         {deleteTarget ? (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">

@@ -142,4 +142,84 @@ module.exports = {
       return res.status(500).json({ error: 'Failed to add stock' })
     }
   },
+
+  stockOut: async (req, res) => {
+    try {
+      const { id } = req.params
+      const payload = req.body || {}
+      const qty = Number(payload?.quantity ?? 0)
+      const reason = String(payload?.reason || '').trim()
+      const remarks = String(payload?.remarks || '').trim()
+
+      if (!reason) return res.status(400).json({ error: 'Reason is required' })
+      if (!qty || qty <= 0) return res.status(400).json({ error: 'Quantity must be greater than zero' })
+
+      const { data: item, error: itemErr } = await supabase.from('inventory_items').select('*').eq('id', id).single()
+      if (itemErr) return res.status(404).json({ error: itemErr.message || itemErr })
+
+      const currentStock = Number(item?.current_stock ?? 0)
+      const minimumStock = Number(item?.minimum_stock ?? 0)
+      if (qty > currentStock) return res.status(400).json({ error: 'Insufficient stock' })
+
+      const newStock = currentStock - qty
+
+      const { error: updateErr } = await supabase.from('inventory_items').update({
+        current_stock: newStock,
+        updated_at: new Date().toISOString(),
+      }).eq('id', id)
+
+      if (updateErr) return res.status(500).json({ error: updateErr.message || updateErr })
+
+      const performedBy = req.user?.id || null
+      const transactionRemarks = `${reason}: ${remarks}`.trim()
+
+      const { error: txErr } = await supabase.from('inventory_transactions').insert({
+        inventory_item_id: id,
+        transaction_type: 'stock_out',
+        quantity: qty,
+        job_order_id: null,
+        remarks: transactionRemarks || null,
+        performed_by: performedBy,
+      })
+
+      if (txErr) return res.status(500).json({ error: txErr.message || txErr })
+
+      const { data: updatedItem, error: updatedItemErr } = await supabase.from('inventory_items').select('*').eq('id', id).single()
+      if (updatedItemErr) return res.status(500).json({ error: updatedItemErr.message || updatedItemErr })
+
+      // Low stock notification for all inventory users
+      let notificationInserted = false
+      if (newStock <= minimumStock) {
+        const { data: inventoryUsers, error: usersErr } = await supabase.from('users').select('id').eq('role', 'inventory')
+        if (!usersErr && Array.isArray(inventoryUsers) && inventoryUsers.length > 0) {
+          const invIds = inventoryUsers.map((u) => u.id).filter(Boolean)
+          if (invIds.length > 0) {
+            const title = 'Low Stock Alert'
+            const message = `⚠ Low Stock: ${updatedItem.item_name} now has ${newStock} ${updatedItem.unit} remaining.`
+            const notifRows = invIds.map((userId) => ({
+              user_id: userId,
+              job_order_id: null,
+              title,
+              message,
+              is_read: false,
+            }))
+
+            const { error: notifErr } = await supabase.from('notifications').insert(notifRows)
+            if (!notifErr) notificationInserted = true
+          }
+        }
+      }
+
+      return res.json({
+        data: {
+          item: updatedItem,
+          notificationInserted,
+        },
+      })
+    } catch (err) {
+      console.error(err)
+      return res.status(500).json({ error: 'Failed to deduct stock' })
+    }
+  },
 }
+
