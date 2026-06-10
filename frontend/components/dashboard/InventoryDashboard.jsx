@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import StatCard from './StatCard'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabaseClient'
+import Link from 'next/link'
 
 
 
@@ -15,6 +16,9 @@ export default function InventoryDashboard() {
 
   const [counts, setCounts] = useState({ total: 0, in_stock: 0, low_stock: 0, out_of_stock: 0 })
   const [lowStockItems, setLowStockItems] = useState([])
+
+  const [recentTxs, setRecentTxs] = useState([])
+  const [recentLoading, setRecentLoading] = useState(false)
 
   useEffect(() => {
     let mounted = true
@@ -51,8 +55,11 @@ export default function InventoryDashboard() {
       }
     }
     load()
-    return () => { mounted = false }
+    return () => {
+      mounted = false
+    }
   }, [authLoading, session?.access_token])
+
 
   useEffect(() => {
     if (authLoading) return undefined
@@ -68,11 +75,6 @@ export default function InventoryDashboard() {
           table: 'inventory_items',
         },
         () => {
-          // Trigger same REST re-fetch used by the initial load effect
-          // (stock updates in backend should emit postgres_changes).
-          // Reusing load by reloading dashboard data via API.
-          // Note: load() is inside another effect; re-run by forcing a state change is unnecessary.
-          // Instead, call the API directly again here to keep behavior consistent.
           const token = session?.access_token
           if (!token) return
 
@@ -104,8 +106,44 @@ export default function InventoryDashboard() {
     }
   }, [authLoading, session?.access_token])
 
+  useEffect(() => {
+    if (authLoading) return undefined
+    if (!session?.access_token) return undefined
+
+    let mounted = true
+    let intervalId = null
+
+    async function fetchRecent() {
+      const token = session?.access_token
+      if (!token) return
+
+      setRecentLoading(true)
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/inventory/transactions/recent`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        const payload = await res.json()
+        if (!mounted) return
+        setRecentTxs(Array.isArray(payload?.data) ? payload.data : [])
+      } catch (e) {
+        if (!mounted) return
+        setRecentTxs([])
+      } finally {
+        if (mounted) setRecentLoading(false)
+      }
+    }
+
+    fetchRecent()
+    intervalId = setInterval(fetchRecent, 30000)
+
+    return () => {
+      mounted = false
+      if (intervalId) clearInterval(intervalId)
+    }
+  }, [authLoading, session?.access_token])
 
   if (authLoading) {
+
 
     return (
       <ProtectedRoute>
@@ -130,12 +168,79 @@ export default function InventoryDashboard() {
             <StatCard label="Out of Stock" value={counts.out_of_stock} tone="danger" />
           </section>
 
+          <section className="rounded-[24px] border border-gray-200 bg-white p-5 shadow-sm">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-bold text-black">Recent Stock Activity</h2>
+                <p className="text-sm text-gray-500">Latest inventory movements</p>
+              </div>
+              <Link href="/inventory" className="rounded-2xl border border-gray-200 px-4 py-2 text-sm font-semibold text-black hover:bg-gray-50">
+                View All
+              </Link>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-left text-sm">
+                <thead className="bg-[#FFF0F0] text-gray-700">
+                  <tr>
+                    <th className="px-4 py-3">Date</th>
+                    <th className="px-4 py-3">Item Name</th>
+                    <th className="px-4 py-3">Type</th>
+                    <th className="px-4 py-3">Quantity</th>
+                    <th className="px-4 py-3">JO No.</th>
+                    <th className="px-4 py-3">Performed By</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recentLoading ? (
+                    <tr className="border-t border-gray-100">
+                      <td className="px-4 py-4 text-gray-500" colSpan={6}>
+                        Loading recent activity...
+                      </td>
+                    </tr>
+                  ) : recentTxs.length === 0 ? (
+                    <tr className="border-t border-gray-100">
+                      <td className="px-4 py-4 text-gray-500" colSpan={6}>
+                        No recent activity.
+                      </td>
+                    </tr>
+                  ) : (
+                    recentTxs.map((tx) => {
+                      const type = tx?.transaction_type === 'stock_in' ? 'Stock In' : 'Stock Out'
+                      const isIn = tx?.transaction_type === 'stock_in'
+                      const qty = Number(tx?.quantity ?? 0)
+                      const signedQty = isIn ? `+${qty}` : `-${qty}`
+
+                      return (
+                        <tr key={tx?.id} className="border-t border-gray-100 align-top">
+                          <td className="px-4 py-3 text-gray-700">
+                            {tx?.created_at ? new Date(tx.created_at).toLocaleString() : '—'}
+                          </td>
+                          <td className="px-4 py-3 font-medium text-black">{tx?.inventory_items?.item_name || '—'}</td>
+                          <td className="px-4 py-3 text-gray-700">{type}</td>
+                          <td className="px-4 py-3">
+                            <span className={`font-semibold ${isIn ? 'text-emerald-700' : 'text-red-700'}`}>{signedQty}</span>
+                          </td>
+                          <td className="px-4 py-3 text-gray-700">{tx?.job_order?.jo_number || '—'}</td>
+                          <td className="px-4 py-3 text-gray-700">{tx?.performer?.name || '—'}</td>
+
+                        </tr>
+                      )
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
           {lowStockItems.length > 0 ? (
-            <div className="mb-6 rounded-[24px] border border-yellow-200 bg-yellow-50 px-4 py-4 text-sm font-medium text-yellow-800">
+            <div className="mt-6 rounded-[24px] border border-yellow-200 bg-yellow-50 px-4 py-4 text-sm font-medium text-yellow-800">
               ⚠ Low Stock Alert:{' '}
               {lowStockItems
                 .slice(0, 4)
-                .map((item) => `${item.item_name} (${Number(item.current_stock || 0)} ${item.unit || ''} remaining)`) 
+                .map(
+                  (item) => `${item.item_name} (${Number(item.current_stock || 0)} ${item.unit || ''} remaining)`
+                )
                 .join(', ')}
               {lowStockItems.length > 4 ? '…' : ''}
             </div>

@@ -192,7 +192,7 @@ export default function Sidebar({ hidden = false, setHidden = () => {}, mobileOp
         </nav>
 
         <div className={`border-t border-white/15 ${hidden ? 'px-0 py-3 text-center' : 'px-6 py-5 text-xs'}`}>
-          {!hidden ? 'Governmen View' : null}
+          {!hidden ? 'Goverment View' : null}
         </div>
       </aside>
 

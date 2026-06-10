@@ -21,6 +21,48 @@ module.exports = {
     }
   },
 
+  recentTransactions: async (req, res) => {
+    try {
+      const { data, error } = await supabase
+        .from('inventory_transactions')
+        .select(`
+          id,
+          transaction_type,
+          quantity,
+          created_at,
+          remarks,
+          job_order_id,
+          inventory_item_id,
+          performed_by,
+          inventory_items (
+            id,
+            item_name,
+            unit
+          ),
+          performer:users!performed_by (
+            id,
+            name
+          ),
+          job_orders (
+            id,
+            jo_number
+          )
+        `)
+        .order('created_at', { ascending: false })
+        .limit(10)
+
+
+      if (error) {
+        return res.status(500).json({ error: error.message || error })
+      }
+
+      return res.json({ data: Array.isArray(data) ? data : [] })
+    } catch (err) {
+      console.error(err)
+      return res.status(500).json({ error: 'Failed to fetch recent inventory transactions' })
+    }
+  },
+
   previewUsage: async (req, res) => {
     try {
       const payload = req.body || {}
@@ -31,6 +73,7 @@ module.exports = {
       return res.status(500).json({ error: 'Failed to preview inventory usage' })
     }
   },
+
 
   getById: async (req, res) => {
     try {

@@ -10,6 +10,15 @@ const inventoryWriteAccess = requireAnyRole(['inventory'])
 // Read-only access for admins/inventory (used by JO creation dropdown)
 router.get('/', authMiddleware, inventoryReadAccess, inventory.list)
 router.get('/items', authMiddleware, inventoryReadAccess, inventory.list)
+
+// Recent inventory transactions (inventory role only)
+router.get(
+  '/transactions/recent',
+  authMiddleware,
+  requireAnyRole(['inventory']),
+  inventory.recentTransactions
+)
+
 router.get('/items/:id', authMiddleware, inventoryReadAccess, inventory.getById)
 
 
@@ -20,6 +29,7 @@ router.put('/:id', authMiddleware, inventoryWriteAccess, inventory.update)
 router.delete('/:id', authMiddleware, inventoryWriteAccess, inventory.remove)
 router.post('/items/:id/stock-out', authMiddleware, inventoryWriteAccess, inventory.stockOut)
 router.post('/:id/stock', authMiddleware, inventoryWriteAccess, inventory.addStock)
+
 
 
 
