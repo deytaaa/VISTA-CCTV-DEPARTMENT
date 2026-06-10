@@ -149,7 +149,7 @@ export default function Login() {
             City of Taguig
           </p>
           <h1 className="mt-2 text-2xl font-black tracking-tight text-black">
-            CCTV Department
+             Government
           </h1>
           <p className="mt-2 text-sm text-gray-600">
             Inventory and Dispatching System
