@@ -24,9 +24,11 @@ create table if not exists public.users (
   name text not null,
   email text not null unique,
   role public.user_role not null default 'technician',
+  is_active boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
 
 -- Auto-create profile rows from Supabase Auth signups.
 create or replace function public.handle_new_auth_user()

@@ -5,14 +5,16 @@ function getTargetUserId(req) {
   return id ? String(id) : null;
 }
 
-function pickProfileDefaults({ id, name, email, role }) {
-  return {
-    id: id ?? null,
-    name: name ?? '',
-    email: email ?? '',
-    role: role ?? null,
-  };
-}
+  function pickProfileDefaults({ id, name, email, role, is_active }) {
+    return {
+      id: id ?? null,
+      name: name ?? '',
+      email: email ?? '',
+      role: role ?? null,
+      is_active: is_active ?? true,
+    };
+  }
+
 
 module.exports = {
   // GET /api/users/technicians
@@ -48,8 +50,10 @@ module.exports = {
 
       const { data: profileRows, error: profileError } = await supabase
         .from('users')
-        .select('id, name, email, role, created_at')
+        .select('id, name, email, role, created_at, is_active')
         .in('id', userIds);
+
+
 
       if (profileError) return res.status(500).json({ error: profileError.message || profileError });
 
@@ -64,6 +68,7 @@ module.exports = {
             email: p?.email ?? u.email,
             role: p?.role ?? u.app_metadata?.role ?? u.user_metadata?.role ?? null,
             created_at: p?.created_at ?? u.created_at ?? null,
+            is_active: p?.is_active ?? true,
           };
         })
         .sort((a, b) => {
@@ -191,7 +196,7 @@ module.exports = {
     }
   },
 
-  // DELETE /api/users/:id
+  // DELETE /api/users/:id (soft delete)
   deleteUser: async (req, res) => {
     try {
       const targetUserId = getTargetUserId(req);
@@ -199,20 +204,78 @@ module.exports = {
 
       const adminUserId = req.user?.id;
       if (adminUserId && String(adminUserId) === String(targetUserId)) {
-        return res.status(400).json({ error: 'You cannot delete your own account.' });
+        return res.status(400).json({ error: 'You cannot deactivate your own account.' });
       }
 
-      // Delete profile row first (optional but keeps data consistent)
-      await supabase.from('users').delete().eq('id', targetUserId);
+      // Soft-deactivate profile row
+      const { error: profileError } = await supabase.from('users').update({
+        is_active: false,
+      }).eq('id', targetUserId);
 
-      const { error } = await supabase.auth.admin.deleteUser(targetUserId);
-      if (error) return res.status(500).json({ error: error.message || error });
+      if (profileError) return res.status(500).json({ error: profileError.message || profileError });
+
+      // Ban auth account to effectively disable login
+      // (use a very long duration as requested)
+      const { error: authError } = await supabase.auth.admin.updateUserById(targetUserId, {
+        ban_duration: '876000h',
+      });
+      if (authError) return res.status(500).json({ error: authError.message || authError });
 
       return res.json({ ok: true });
     } catch (err) {
       console.error(err);
-      return res.status(500).json({ error: 'Failed to delete user' });
+      return res.status(500).json({ error: 'Failed to deactivate user' });
+    }
+  },
+
+  // POST /api/users/:id/reactivate (admin)
+  reactivateUser: async (req, res) => {
+    try {
+      const targetUserId = getTargetUserId(req);
+      if (!targetUserId) return res.status(400).json({ error: 'Missing user id' });
+
+      const { error: profileError } = await supabase.from('users').update({
+        is_active: true,
+      }).eq('id', targetUserId);
+
+      if (profileError) return res.status(500).json({ error: profileError.message || profileError });
+
+      const { error: authError } = await supabase.auth.admin.updateUserById(targetUserId, {
+        ban_duration: 'none',
+      });
+      if (authError) return res.status(500).json({ error: authError.message || authError });
+
+      return res.json({ ok: true });
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ error: 'Failed to reactivate user' });
+    }
+  },
+
+  // GET /api/users/inactive (admin)
+  listInactiveUsers: async (req, res) => {
+    try {
+      // Pull all active=false profiles first, then map to auth user fields.
+      const { data: profileRows, error: profileError } = await supabase
+        .from('users')
+        .select('id, name, email, role, created_at, is_active')
+        .eq('is_active', false)
+        .order('created_at', { ascending: false });
+
+      if (profileError) return res.status(500).json({ error: profileError.message || profileError });
+
+      const inactiveProfiles = Array.isArray(profileRows) ? profileRows : [];
+      const userIds = inactiveProfiles.map((p) => p.id);
+      if (userIds.length === 0) return res.json({ data: [] });
+
+      // Auth user list (for extra fields if needed later). We currently just return profiles.
+      return res.json({ data: inactiveProfiles });
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ error: 'Failed to list inactive users' });
     }
   },
 };
+
+
 

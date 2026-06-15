@@ -16,6 +16,10 @@ router.put('/:id', authMiddleware, isAdmin, usersController.updateUser);
 router.post('/:id/reset-password', authMiddleware, isAdmin, usersController.resetPassword);
 router.delete('/:id', authMiddleware, isAdmin, usersController.deleteUser);
 
+// Admin-only inactive/deactivated user management
+router.get('/inactive', authMiddleware, isAdmin, usersController.listInactiveUsers);
+router.post('/:id/reactivate', authMiddleware, isAdmin, usersController.reactivateUser);
 
 module.exports = router;
+
 

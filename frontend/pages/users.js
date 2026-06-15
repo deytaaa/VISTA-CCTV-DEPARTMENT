@@ -56,6 +56,9 @@ export default function UsersPage() {
 
   const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
+
+
 
   const [createOpen, setCreateOpen] = useState(false)
   const [createForm, setCreateForm] = useState({ name: '', email: '', password: '', role: 'technician' })
@@ -73,6 +76,16 @@ export default function UsersPage() {
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleteSaving, setDeleteSaving] = useState(false)
+
+  const [reactivateOpen, setReactivateOpen] = useState(false)
+  const [reactivateTarget, setReactivateTarget] = useState(null)
+  const [reactivateSaving, setReactivateSaving] = useState(false)
+
+  const [inactiveUsers, setInactiveUsers] = useState([])
+  const [inactiveLoading, setInactiveLoading] = useState(false)
+  const [inactiveError, setInactiveError] = useState(null)
+  const [reactivateSavingId, setReactivateSavingId] = useState(null)
+
 
   const authHeaders = useMemo(() => {
     if (!session?.access_token) return {}
@@ -116,7 +129,12 @@ export default function UsersPage() {
         String(u?.role || '').toLowerCase().includes(s)
 
       const matchesRole = !roleFilter || String(u?.role || '') === roleFilter
-      return matchesSearch && matchesRole
+      const matchesStatus =
+        statusFilter === 'all' ||
+        (statusFilter === 'active' && Boolean(u?.is_active) === true) ||
+        (statusFilter === 'inactive' && Boolean(u?.is_active) === false)
+      return matchesSearch && matchesRole && matchesStatus
+
     })
   }, [users, search, roleFilter])
 
@@ -139,6 +157,11 @@ export default function UsersPage() {
   function openDelete(u) {
     setDeleteTarget(u)
     setDeleteOpen(true)
+  }
+
+  function openReactivate(u) {
+    setReactivateTarget(u)
+    setReactivateOpen(true)
   }
 
   async function handleCreate() {
@@ -229,11 +252,38 @@ export default function UsersPage() {
     }
   }
 
+  async function handleReactivate() {
+    if (!reactivateTarget?.id) return
+
+    setReactivateSaving(true)
+    setToast(null)
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/users/${reactivateTarget.id}/reactivate`, {
+        method: 'POST',
+        headers: authHeaders,
+      })
+
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(payload?.error || 'Failed to reactivate user')
+
+      setReactivateOpen(false)
+      setReactivateTarget(null)
+      setToast({ type: 'success', message: 'User reactivated.' })
+      await loadUsers()
+    } catch (e) {
+      setToast({ type: 'error', message: e.message || 'Failed to reactivate user' })
+    } finally {
+      setReactivateSaving(false)
+    }
+  }
+
   async function handleDelete() {
+
     if (!deleteTarget?.id) return
 
     if (user?.id && String(deleteTarget.id) === String(user.id)) {
-      setToast({ type: 'error', message: 'You cannot delete your own account.' })
+      setToast({ type: 'error', message: 'You cannot deactivate your own account.' })
+
       return
     }
 
@@ -281,9 +331,9 @@ export default function UsersPage() {
             </div>
           ) : null}
 
-          <div className="flex flex-col gap-4 rounded-[28px] border border-gray-200 bg-white p-5 shadow-sm lg:flex-row lg:items-end lg:justify-between">
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1.5fr_220px] lg:items-end">
-              <div>
+          <div className="rounded-[28px] border border-gray-200 bg-white p-5 shadow-sm">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:gap-3">
+              <div className="flex-1 sm:flex-none sm:w-auto">
                 <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Search</label>
                 <input
                   value={search}
@@ -292,7 +342,7 @@ export default function UsersPage() {
                   className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-black"
                 />
               </div>
-              <div>
+              <div className="sm:w-48">
                 <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Role</label>
                 <select
                   value={roleFilter}
@@ -307,9 +357,19 @@ export default function UsersPage() {
                   ))}
                 </select>
               </div>
-            </div>
+              <div className="sm:w-48">
+                <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Status</label>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-black"
+                >
+                  <option value="all">All</option>
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                </select>
+              </div>
 
-            <div className="flex gap-3">
               <button
                 type="button"
                 onClick={() => {
@@ -323,7 +383,7 @@ export default function UsersPage() {
               <button
                 type="button"
                 onClick={openCreate}
-                className="rounded-2xl bg-taguigRed px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-red-900/10 hover:bg-taguigDark"
+                className="ml-auto rounded-2xl bg-taguigRed px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-red-900/10 hover:bg-taguigDark"
               >
                 Add New User
               </button>
@@ -338,17 +398,20 @@ export default function UsersPage() {
                     <th className="px-4 py-3">Name</th>
                     <th className="px-4 py-3">Email</th>
                     <th className="px-4 py-3">Role</th>
+                    <th className="px-4 py-3">Status</th>
                     <th className="px-4 py-3">Created At</th>
                     <th className="px-4 py-3">Actions</th>
+
                   </tr>
                 </thead>
                 <tbody>
                   {loading ? (
                     <tr>
-                      <td className="px-4 py-4 text-gray-500" colSpan={5}>
+                      <td className="px-4 py-4 text-gray-500" colSpan={6}>
                         Loading...
                       </td>
                     </tr>
+
                   ) : filteredUsers.length === 0 ? (
                     <tr>
                       <td className="px-4 py-4 text-gray-500" colSpan={5}>
@@ -361,7 +424,19 @@ export default function UsersPage() {
                         <td className="px-4 py-3 font-medium text-black">{u.name || '—'}</td>
                         <td className="px-4 py-3 text-gray-700">{u.email || '—'}</td>
                         <td className="px-4 py-3 text-gray-700">{u.role || '—'}</td>
+                        <td className="px-4 py-3">
+                          {Boolean(u?.is_active) ? (
+                            <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700">
+                              Active
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center rounded-full border border-gray-200 bg-gray-50 px-2 py-1 text-[11px] font-semibold text-gray-600">
+                              Inactive
+                            </span>
+                          )}
+                        </td>
                         <td className="px-4 py-3 text-gray-700">{formatDate(u.created_at)}</td>
+
                         <td className="px-4 py-3">
                           <div className="flex flex-wrap gap-2">
                             <button
@@ -371,21 +446,35 @@ export default function UsersPage() {
                             >
                               Edit
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => openReset(u)}
-                              className="rounded-2xl border border-gray-200 px-3 py-2 text-xs font-semibold text-black hover:bg-gray-50"
-                            >
-                              Reset Password
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => openDelete(u)}
-                              disabled={Boolean(user?.id && String(user.id) === String(u.id))}
-                              className="rounded-2xl border border-red-200 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                              Delete
-                            </button>
+                            {Boolean(u?.is_active) ? (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => openReset(u)}
+                                  className="rounded-2xl border border-gray-200 px-3 py-2 text-xs font-semibold text-black hover:bg-gray-50"
+                                >
+                                  Reset Password
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => openDelete(u)}
+                                  disabled={Boolean(user?.id && String(user.id) === String(u.id))}
+                                  className="rounded-2xl border border-red-200 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  Deactivate
+                                </button>
+                              </>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => openReactivate(u)}
+                                className="rounded-2xl border border-gray-200 px-3 py-2 text-xs font-semibold text-black hover:bg-gray-50"
+                              >
+                                Reactivate
+                              </button>
+                            )}
+
+
                           </div>
                         </td>
                       </tr>
@@ -552,17 +641,52 @@ export default function UsersPage() {
           </ModalShell>
         ) : null}
 
+        {reactivateOpen && reactivateTarget ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+            <div className="w-full max-w-lg rounded-[28px] bg-white p-6 shadow-2xl">
+              <h3 className="text-xl font-black text-black">Reactivate User</h3>
+
+              <p className="mt-2 text-sm text-gray-600">
+                Are you sure you want to reactivate <span className="font-semibold text-black">{reactivateTarget.name || reactivateTarget.email}</span>? They will be able to log in again.
+              </p>
+
+              <div className="mt-6 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReactivateOpen(false)
+                    setReactivateTarget(null)
+                  }}
+                  className="rounded-2xl border border-gray-200 px-5 py-3 text-sm font-semibold text-black hover:bg-gray-50"
+                  disabled={reactivateSaving}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleReactivate}
+                  disabled={reactivateSaving}
+                  className="rounded-2xl bg-emerald-500 px-5 py-3 text-sm font-semibold text-white hover:bg-emerald-600 disabled:opacity-60"
+                >
+                  {reactivateSaving ? 'Reactivating...' : 'Reactivate'}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
         {deleteOpen && deleteTarget ? (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
             <div className="w-full max-w-lg rounded-[28px] bg-white p-6 shadow-2xl">
-              <h3 className="text-xl font-black text-black">Delete User</h3>
+              <h3 className="text-xl font-black text-black">Deactivate User</h3>
+
               <p className="mt-2 text-sm text-gray-600">
-                Delete <span className="font-semibold text-black">{deleteTarget.name || deleteTarget.email}</span>? This cannot be undone.
+                Are you sure you want to deactivate <span className="font-semibold text-black">{deleteTarget.name || deleteTarget.email}</span>? They will no longer be able to log in. You can reactivate them later.
               </p>
 
               {isSelfTargetDelete ? (
-                <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
-                  You cannot delete your own account.
+                <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-700">
+                  You cannot deactivate your own account.
                 </div>
               ) : null}
 
@@ -582,9 +706,9 @@ export default function UsersPage() {
                   type="button"
                   onClick={handleDelete}
                   disabled={deleteSaving || isSelfTargetDelete}
-                  className="rounded-2xl bg-red-600 px-5 py-3 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+                  className="rounded-2xl bg-amber-500 px-5 py-3 text-sm font-semibold text-white hover:bg-amber-600 disabled:opacity-60"
                 >
-                  {deleteSaving ? 'Deleting...' : 'Delete'}
+                  {deleteSaving ? 'Deactivating...' : 'Deactivate'}
                 </button>
               </div>
             </div>
