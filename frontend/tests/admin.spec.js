@@ -2,11 +2,93 @@ import { test, expect } from '@playwright/test'
 import fs from 'fs'
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:3000'
+const API_URL = process.env.API_URL || 'http://localhost:5000'
 
 const ADMIN_EMAIL = 'admin@gmail.com'
 const ADMIN_PASSWORD = 'admin123'
 
 test.describe('Admin Dashboard', () => {
+  // Clean up leftover test data from previous runs before any test starts.
+  // This deletes users whose email contains 'temp-deactivate-' or 'tech-'
+  // so the Users table doesn't accumulate junk between runs and so
+  // search/visibility assertions aren't polluted by stale rows.
+  test.beforeAll(async ({ request }) => {
+    // Try the dedicated backend API first, then fall back to the
+    // frontend's own /api routes (Next.js API routes) in case there is
+    // no separate backend service running on API_URL. Cleanup is
+    // best-effort: if neither is reachable we skip quietly rather than
+    // spamming ECONNREFUSED noise on every run.
+    const candidateBases = [API_URL, BASE_URL]
+    let token = null
+    let workingBase = null
+
+    for (const base of candidateBases) {
+      try {
+        const loginRes = await request.post(`${base}/api/auth/login`, {
+          data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD },
+          timeout: 5000,
+        })
+
+        if (loginRes.ok()) {
+          const loginBody = await loginRes.json().catch(() => ({}))
+          token = loginBody?.token || loginBody?.access_token || loginBody?.session?.access_token
+          if (token) {
+            workingBase = base
+            break
+          }
+        }
+      } catch (err) {
+        // Try next candidate base silently — only warn once we've
+        // exhausted all options below.
+        continue
+      }
+    }
+
+    if (!token || !workingBase) {
+      console.warn(
+        `Cleanup skipped: could not reach an API to log in as admin (tried ${candidateBases.join(', ')}). ` +
+          'This is non-fatal — tests will just accumulate test-data users until this is fixed.'
+      )
+      return
+    }
+
+    try {
+      const usersRes = await request.get(`${workingBase}/api/users`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+
+      if (!usersRes.ok()) {
+        console.warn('Cleanup skipped: could not fetch users list', usersRes.status())
+        return
+      }
+
+      const usersBody = await usersRes.json().catch(() => ({}))
+      const allUsers = Array.isArray(usersBody) ? usersBody : usersBody?.data || []
+
+      const staleUsers = allUsers.filter((u) => {
+        const email = String(u?.email || '')
+        return email.includes('temp-deactivate-') || email.includes('tech-')
+      })
+
+      console.log(`Cleanup: found ${staleUsers.length} stale test user(s) to delete`)
+
+      for (const staleUser of staleUsers) {
+        const id = staleUser.id
+        if (!id) continue
+
+        const deleteRes = await request.delete(`${workingBase}/api/users/${id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+
+        console.log(
+          `Cleanup: deleted user ${staleUser.email} -> status ${deleteRes.status()}`
+        )
+      }
+    } catch (err) {
+      console.warn('Cleanup step threw an error (continuing anyway):', err?.message || err)
+    }
+  })
+
   test.beforeEach(async ({ page }) => {
     // Navigate to login page
     await page.goto(`${BASE_URL}/login`)
@@ -30,29 +112,142 @@ test.describe('Admin Dashboard', () => {
     await page.goto(`${BASE_URL}/jo/create`)
     await page.waitForLoadState('networkidle')
 
-    await page.fill('input[placeholder*="location" i], input[name*="location" i]', 'Building A, Floor 2')
+    await page.fill('input[placeholder*="location" i]', 'Building A, Floor 2')
 
+    // Fill date
     const dateInput = page.locator('input[type="date"]')
     if ((await dateInput.count()) > 0) {
       await dateInput.first().fill(new Date().toISOString().split('T')[0])
     }
 
-    const inventorySelect = page.locator('select, [role="combobox"]').first()
-    await inventorySelect.click()
-    await page.locator('text=/Camera|Equipment|Item/i').first().click()
-
-    const technicianSelect = page.locator('select').nth(1)
+    // Wait for technician dropdown to load then select first technician
+    const technicianSelect = page.locator('select').filter({
+      has: page.locator('option:has-text("Select a technician")'),
+    }).first()
+    await expect(technicianSelect).toBeEnabled({ timeout: 10000 })
     await technicianSelect.selectOption({ index: 1 })
 
-    await page.click('button:has-text("Create"), button:has-text("Submit"), button:has-text("Save")')
+    // Wait for inventory dropdown to load then select first item
+    const inventorySelect = page.locator('select').filter({
+      has: page.locator('option:has-text("Select item")'),
+    }).first()
+    await expect(inventorySelect).toBeEnabled({ timeout: 10000 })
+    await inventorySelect.selectOption({ index: 1 })
 
-    const successToast = page.locator('text=/success|created|saved|updated|deactivated/i').first()
-    await expect(successToast).toBeVisible({ timeout: 10000 })
+    // The app now validates that every Supplies & Equipment row with an
+    // item selected must also have a valid quantity > 0 — selecting an
+    // item alone is no longer enough to submit. Fill the Qty input in
+    // the same row so the form actually passes validation.
+    let qtyInput = page
+      .locator('tr, [data-testid="supply-row"], div')
+      .filter({ has: inventorySelect })
+      .locator('input[type="number"], input[placeholder*="qty" i], input[name*="quantity" i]')
+      .first()
 
-    const toastText = await successToast.first().textContent()
-    expect(toastText).toMatch(/success|created|saved|updated|deactivated|draft/i)
+    const qtyVisible = await qtyInput.isVisible().catch(() => false)
+    if (!qtyVisible) {
+      // Row-scoping locator didn't match the actual DOM structure — fall
+      // back to the first numeric/qty-labelled input anywhere on the page,
+      // which works as long as there's only one Supplies row at this point.
+      console.warn('Row-scoped Qty locator not found, falling back to page-level Qty input')
+      qtyInput = page
+        .locator('input[type="number"], input[placeholder*="qty" i], input[name*="quantity" i]')
+        .first()
+    }
+
+    await expect(qtyInput).toBeVisible({ timeout: 5000 })
+    await qtyInput.fill('1')
+
+    // The app now also validates that at least one Personnel / Job
+    // Description entry is required before generating or saving a JO.
+    // Fill the first Name input in that section so validation passes.
+    // Scope to the container after the "Personnel" heading to avoid
+    // accidentally matching the Item Name input in the Supplies table.
+    let personnelNameInput = page
+      .locator('text=/Personnel/i')
+      .locator('xpath=following::input[contains(translate(@placeholder, "NAME", "name"), "name")][1]')
+
+    let personnelInputVisible = await personnelNameInput.isVisible().catch(() => false)
+
+    if (!personnelInputVisible) {
+      // Fallback: any input with a "name" placeholder that is NOT the
+      // item name field (heuristic: item inputs usually mention "item").
+      console.warn('Scoped Personnel Name locator not found, falling back to broad name input search')
+      personnelNameInput = page
+        .locator('input[placeholder*="name" i]')
+        .filter({ hasNot: page.locator('[placeholder*="item" i]') })
+        .last()
+      personnelInputVisible = await personnelNameInput.isVisible().catch(() => false)
+    }
+
+    if (personnelInputVisible) {
+      await personnelNameInput.fill('Test Technician Name')
+    } else {
+      console.warn(
+        'Personnel Name input not found with any selector — ' +
+          'Generate JO will likely be blocked by "at least one personnel" validation.'
+      )
+    }
+
+    // Click Generate JO (submits with status sent)
+    await page.click('button:has-text("Generate JO")')
+
+    // Wait for the JO Number field to flip from the placeholder
+    // ("AUTO-GENERATED ON SUBMIT") to an actual JO-2026-XXXX value, and
+    // for the submit button's "Generating..." loading state to clear.
+    // This avoids racing the toast assertion against an in-flight request.
+    await page
+      .locator('button:has-text("Generating..."), button:has-text("Saving...")')
+      .first()
+      .waitFor({ state: 'hidden', timeout: 15000 })
+      .catch(() => null)
+
+    // Capture a screenshot immediately after submit, before any toast
+    // assertion, so we can see exactly what the UI rendered if the
+    // selector below doesn't match (toast text, error banner, etc.)
+    await page.screenshot({
+      path: 'test-results/debug-jo-create-toast.png',
+      fullPage: true,
+    })
+
+    // Dump the full page text so the actual toast wording is visible in
+    // the test logs/artifacts even if no locator matches at all.
+    const bodyTextAfterSubmit = await page.textContent('body').catch(() => '')
+    console.log('PAGE TEXT AFTER GENERATE JO SUBMIT:', bodyTextAfterSubmit?.slice(0, 2000))
+
+    // IMPORTANT: the JO Number field's static label reads
+    // "AUTO-GENERATED ON SUBMIT" which contains the word "generated" and
+    // previously caused this locator to match the field label instead of
+    // a real success toast (false positive — the test passed without any
+    // JO actually being confirmed created). Exclude that exact label text
+    // and scope to a toast-like container so we only match real banners.
+    const successToast = page
+      .locator(
+        '[role="alert"], [class*="toast" i], [class*="banner" i], [class*="notification" i], [class*="alert" i]'
+      )
+      .filter({ hasText: /success|created|sent|generated|draft saved|JO-20/i })
+      .filter({ hasNotText: /AUTO-GENERATED ON SUBMIT/i })
+      .first()
+
+    // Fallback: if no dedicated toast container exists in the DOM, fall
+    // back to a plain text match but still explicitly exclude the field
+    // label so we never silently pass on a false positive again.
+    const toastVisible = await successToast.isVisible().catch(() => false)
+    const finalToast = toastVisible
+      ? successToast
+      : page
+          .locator('text=/success|created|sent|generated|draft saved|JO-20/i')
+          .filter({ hasNotText: /AUTO-GENERATED ON SUBMIT/i })
+          .first()
+
+    await expect(finalToast).toBeVisible({ timeout: 15000 })
+
+    const toastText = await finalToast.textContent()
+    console.log('MATCHED TOAST TEXT:', toastText)
+
+    expect(toastText).not.toMatch(/AUTO-GENERATED ON SUBMIT/i)
+    expect(toastText).toMatch(/success|created|sent|generated|draft saved|JO-20/i)
   })
-
 
   test('View the created JO in Job Orders list → should appear in the table', async ({ page }) => {
     test.setTimeout(30000)
@@ -61,8 +256,27 @@ test.describe('Admin Dashboard', () => {
     await page.goto(`${BASE_URL}/jo`)
     await page.waitForLoadState('networkidle')
 
+    // Dump what's actually on the page before asserting anything — if the
+    // previous create-JO test's toast was a false positive (matched the
+    // "AUTO-GENERATED ON SUBMIT" label instead of a real success toast),
+    // this list may legitimately be empty and we want that visible in logs
+    // rather than a bare timeout.
+    const bodyText = await page.textContent('body').catch(() => '')
+    console.log('JOB ORDERS PAGE TEXT:', bodyText?.slice(0, 1500))
+    await page.screenshot({ path: 'test-results/debug-jo-list-page.png', fullPage: true })
+
     // Wait for either table rows (desktop) or JO cards (responsive views)
     const tableRows = page.locator('table tbody tr, .jo-card, [data-testid="jo-row"]')
+
+    // If the page shows an explicit empty state, fail with a clear message
+    // instead of a generic timeout.
+    const emptyState = page.locator('text=/no job orders|no results|empty/i')
+    if (await emptyState.first().isVisible().catch(() => false)) {
+      throw new Error(
+        'Job Orders list shows an empty state — the JO from the previous test was not actually created. Check the create-JO test toast assertion.'
+      )
+    }
+
     await expect(tableRows.first()).toBeVisible({ timeout: 10000 })
 
     // Verify table has content
@@ -158,7 +372,6 @@ test.describe('Admin Dashboard', () => {
     const roleSelect = page.locator('select:visible').first()
     await roleSelect.selectOption('technician')
 
-
     // Dump ALL visible input attributes to find correct selectors
     const inputs = page.locator('input:visible, select:visible, textarea:visible')
     const count = await inputs.count()
@@ -180,12 +393,12 @@ test.describe('Admin Dashboard', () => {
     })
 
     // Prevent potential dialog blocking/crash
-    page.on('dialog', dialog => dialog.accept())
+    page.on('dialog', (dialog) => dialog.accept())
 
     // Intercept submit BEFORE clicking (prevents full navigation/reload crash)
     await page.evaluate(() => {
-      document.querySelectorAll('form').forEach(f => {
-        f.addEventListener('submit', e => e.preventDefault())
+      document.querySelectorAll('form').forEach((f) => {
+        f.addEventListener('submit', (e) => e.preventDefault())
       })
     })
 
@@ -203,15 +416,10 @@ test.describe('Admin Dashboard', () => {
     const roleVal = await page.locator('select:visible').first().inputValue().catch(() => 'not found')
     console.log('FORM VALUES:', { nameVal, emailVal, passVal, roleVal })
 
-
     const rows = await page.locator('table tbody tr').allTextContents().catch(() => [])
     console.log('TABLE ROWS:', rows)
 
-
-
-
     await page.screenshot({ path: 'test-results/debug-after-submit.png', fullPage: true })
-
 
     // Wait for success message (custom toast in UI)
     const successToast = page.locator('text=/success|created|saved|updated|deactivated/i').first()
@@ -221,7 +429,6 @@ test.describe('Admin Dashboard', () => {
     const usersTable = page.locator('table').first()
     const createdRow = usersTable.locator('tbody tr').filter({ has: page.locator(`td:has-text("${email}")`) }).first()
 
-    await expect(usersTable.locator('tbody tr')).toHaveCountGreaterThan?.(0).catch(() => null)
     await expect(createdRow).toBeVisible({ timeout: 20000 })
 
     // Debug: take screenshot and dump HTML to see what's on page
@@ -233,7 +440,6 @@ test.describe('Admin Dashboard', () => {
     fs.writeFileSync('test-results/debug-users-page.html', html)
   })
 
-
   test('Deactivate a user → should show Inactive badge', async ({ page }) => {
     test.setTimeout(30000)
 
@@ -243,8 +449,19 @@ test.describe('Admin Dashboard', () => {
     await page.goto(`${BASE_URL}/users`)
     await page.waitForLoadState('networkidle')
 
-    const addButton = page.locator('button:has-text("Add"), button:has-text("Create"), button:has-text("New")')
-    await addButton.first().click()
+    // Confirm we actually landed on the Users page and it rendered before
+    // searching for the Add button — under parallel test load this page
+    // can occasionally still be hydrating when the locator search starts,
+    // causing a false "element not found" after the full 30s timeout.
+    await expect(page.locator('h1, h2, [role="heading"]').first()).toBeVisible({
+      timeout: 15000,
+    })
+
+    const addButton = page
+      .locator('button:has-text("Add New User"), button:has-text("Add")')
+      .first()
+    await expect(addButton).toBeVisible({ timeout: 15000 })
+    await addButton.click()
 
     // Name field (second visible input after the search bar)
     await page.locator('input:visible').nth(1).fill('Temp Deactivate User')
@@ -256,7 +473,6 @@ test.describe('Admin Dashboard', () => {
     // Role select by visible index
     const roleSelect = page.locator('select:visible').first()
     await roleSelect.selectOption('technician')
-
 
     await page.screenshot({ path: 'test-results/debug-create-temp-user-before-submit.png', fullPage: true })
     const tempUserModal = page.locator('div.fixed.inset-0.z-50 div.w-full.max-w-2xl').last()
@@ -283,12 +499,12 @@ test.describe('Admin Dashboard', () => {
     })
 
     // Prevent potential dialog blocking/crash
-    page.on('dialog', dialog => dialog.accept())
+    page.on('dialog', (dialog) => dialog.accept())
 
     // Intercept submit BEFORE clicking (prevents full navigation/reload crash)
     await page.evaluate(() => {
-      document.querySelectorAll('form').forEach(f => {
-        f.addEventListener('submit', e => e.preventDefault())
+      document.querySelectorAll('form').forEach((f) => {
+        f.addEventListener('submit', (e) => e.preventDefault())
       })
     })
 
@@ -306,16 +522,12 @@ test.describe('Admin Dashboard', () => {
     const roleVal = await page.locator('select:visible').first().inputValue().catch(() => 'not found')
     console.log('FORM VALUES:', { nameVal, emailVal, passVal, roleVal })
 
-
     await page.screenshot({ path: 'test-results/debug-create-temp-user-after-submit.png', fullPage: true })
-
-
 
     const successToastAfterCreate = page
       .locator('text=/success|created|saved|updated|deactivated/i')
       .first()
     await expect(successToastAfterCreate).toBeVisible({ timeout: 10000 })
-
 
     await page.reload()
     await page.waitForLoadState('networkidle')
@@ -385,9 +597,7 @@ test.describe('Admin Dashboard', () => {
     const rows = await page.locator('table tbody tr').allTextContents()
     console.log('TABLE ROWS:', rows)
 
-
     // Re-locate the row after reload (old locator may point to detached DOM)
-
     const usersTable = page.locator('table').first()
     const updatedRow = usersTable.locator('tbody tr').filter({ has: page.locator(`td:has-text("${tempEmail}")`) }).first()
     await expect(updatedRow).toBeVisible({ timeout: 20000 })
@@ -396,7 +606,4 @@ test.describe('Admin Dashboard', () => {
     const statusCell = updatedRow.locator('td').nth(3) // Name(0), Email(1), Role(2), Status(3)
     await expect(statusCell).toContainText(/Inactive|Disabled/i, { timeout: 20000 })
   })
-
-
-})  // closes test.describe block
-
+}) // closes test.describe block
