@@ -167,8 +167,60 @@ module.exports = {
       // Prefer caller-provided JO number (frontend generates on submit for sent JOs).
       let joNumber = payload.jo_number || null;
 
+      // BACKEND SANITIZE + VALIDATE BEFORE INSERT (prevents invalid qty from burning JO numbers)
+      if (status === 'sent') {
+        if (!payload.location || payload.location.trim() === '') {
+          return res.status(400).json({ error: 'Location is required.' });
+        }
+
+        const sentItems = Array.isArray(payload.items) ? payload.items : [];
+        const validSentItems = sentItems.filter((it) => {
+          const q = Number(it?.quantity);
+          return Boolean(it?.item_name) && !Number.isNaN(q) && q > 0;
+        });
+
+        if (validSentItems.length === 0) {
+          return res.status(400).json({
+            error: 'At least one item with a valid quantity is required.',
+          });
+        }
+
+        const sentPersonnel = Array.isArray(payload.personnel) ? payload.personnel : [];
+        const validSentPersonnel = sentPersonnel.filter((p) => p?.name && String(p.name).trim() !== '');
+        if (validSentPersonnel.length === 0) {
+          return res.status(400).json({ error: 'At least one personnel is required.' });
+        }
+      }
+
+      if (Array.isArray(payload.items)) {
+
+        const invalidItems = payload.items.filter((it) => {
+          const q = Number(it?.quantity);
+          return (
+            it?.quantity === '' ||
+            it?.quantity == null ||
+            Number.isNaN(q) ||
+            q <= 0
+          );
+        });
+
+        if (invalidItems.length > 0) {
+          return res.status(400).json({
+            error: 'All items must have a valid quantity greater than 0.',
+          });
+        }
+
+        // Normalize quantity to number (and allow DB to rely on numeric columns)
+        payload.items = payload.items.map((it) => ({
+          ...it,
+          quantity: Number(it.quantity),
+        }));
+      }
+
+
       // Generate only for non-draft submissions when JO number is still missing.
       if (!joNumber && status !== 'draft') {
+
         try {
           const { data: rpcData, error: rpcError } = await supabase.rpc('generate_jo_number');
           if (!rpcError) joNumber = normalizeRpcJoNumber(rpcData);
@@ -202,8 +254,26 @@ module.exports = {
         updated_at: new Date().toISOString()
       };
 
-      const { data: created, error: insertError } = await supabase.from('job_orders').insert(insertObj).select('*').single();
-      if (insertError) return res.status(500).json({ error: insertError.message || insertError });
+      let created;
+      try {
+        const insertRes = await supabase
+          .from('job_orders')
+          .insert(insertObj)
+          .select('*')
+          .single();
+
+        if (insertRes.error) {
+          console.error('JO insert failed:', insertRes.error);
+          return res.status(400).json({
+            error: 'Failed to create Job Order. Please check all fields and try again.',
+          });
+        }
+
+        created = insertRes.data;
+      } catch (err) {
+        console.error('Unexpected error creating JO:', err);
+        return res.status(500).json({ error: 'Something went wrong. Please try again.' });
+      }
 
       const jobOrderId = created.id;
 
@@ -214,21 +284,51 @@ module.exports = {
           item_no: it.item_no || idx + 1,
           item_name: it.item_name,
           reference_no: it.reference_no || null,
-          quantity: it.quantity || 1
+          quantity: Number(it.quantity),
         }));
-        const { error: itemsError } = await supabase.from('job_order_items').insert(itemsToInsert);
-        if (itemsError) console.warn('Items insert warning', itemsError);
+
+        try {
+          const { error: itemsError } = await supabase.from('job_order_items').insert(itemsToInsert);
+          if (itemsError) {
+            console.error('Items insert failed:', itemsError);
+            // Roll back the orphaned JO so the number isn't wasted
+            await supabase.from('job_orders').delete().eq('id', jobOrderId);
+            return res.status(400).json({
+              error:
+                'Failed to save item details. The Job Order was not created. Please try again.',
+            });
+          }
+        } catch (err) {
+          console.error('Unexpected items insert error:', err);
+          await supabase.from('job_orders').delete().eq('id', jobOrderId);
+          return res.status(500).json({ error: 'Something went wrong. Please try again.' });
+        }
       }
 
       if (Array.isArray(payload.personnel) && payload.personnel.length > 0) {
         const persToInsert = payload.personnel.map((p, idx) => ({
           job_order_id: jobOrderId,
           personnel_no: p.personnel_no || idx + 1,
-          name: p.name
+          name: p.name,
         }));
-        const { error: persError } = await supabase.from('job_order_personnel').insert(persToInsert);
-        if (persError) console.warn('Personnel insert warning', persError);
+
+        try {
+          const { error: persError } = await supabase.from('job_order_personnel').insert(persToInsert);
+          if (persError) {
+            console.error('Personnel insert failed:', persError);
+            await supabase.from('job_orders').delete().eq('id', jobOrderId);
+            return res.status(400).json({
+              error:
+                'Failed to save personnel details. The Job Order was not created. Please try again.',
+            });
+          }
+        } catch (err) {
+          console.error('Unexpected personnel insert error:', err);
+          await supabase.from('job_orders').delete().eq('id', jobOrderId);
+          return res.status(500).json({ error: 'Something went wrong. Please try again.' });
+        }
       }
+
 
       if (status === 'sent') {
         try {

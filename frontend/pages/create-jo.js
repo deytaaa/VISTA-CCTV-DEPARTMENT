@@ -438,16 +438,63 @@ export default function CreateJO() {
   async function submitJobOrder(status) {
     setError('')
 
-    if (status === 'draft' && !location.trim()) {
-      setError('Please enter a location before saving as draft.')
+    // Location validation (required for both draft and sent)
+    if (!location || location.trim() === '') {
+      setError('Location is required.')
       return
     }
+
 
     if (status === 'sent' && !selectedTechnicianId) {
       setError('Please assign this job order to a technician.')
       setLoading(false)
       return
     }
+
+    // ITEM VALIDATION + cleaning (drop fully-empty rows, but block incomplete ones)
+    const supplyRows = Array.isArray(items) ? items : []
+    const cleanedItems = supplyRows.filter((row) => row.item_name || row.quantity)
+
+    const incompleteItems = cleanedItems.filter(
+      (row) =>
+        !row.item_name ||
+        row.quantity === '' ||
+        row.quantity == null ||
+        Number(row.quantity) <= 0 ||
+        Number.isNaN(Number(row.quantity))
+    )
+
+    if (status === 'sent') {
+      if (cleanedItems.length === 0) {
+        setError('Please add at least one item before generating the JO.')
+        setLoading(false)
+        return
+      }
+
+      if (incompleteItems.length > 0) {
+        setError('Please select an item and enter a valid quantity for every row, or remove the empty row.')
+        setLoading(false)
+        return
+      }
+    }
+
+    // If draft: still ensure we never send a truly empty list.
+    if (status === 'draft' && cleanedItems.length === 0) {
+      setError('Please add at least one item before saving the job order.')
+      setLoading(false)
+      return
+    }
+
+    // Personnel validation + cleaning
+    const personnelRows = Array.isArray(personnel) ? personnel : []
+    const cleanedPersonnel = personnelRows.filter((row) => row.name && row.name.trim() !== '')
+
+    if (cleanedPersonnel.length === 0) {
+      setError('Please add at least one personnel before generating/saving the job order.')
+      setLoading(false)
+      return
+    }
+
 
     setLoading(true)
 
@@ -495,6 +542,18 @@ export default function CreateJO() {
         joNumberForSubmit = genPayload.jo_number
       }
 
+      // Convert to NUMBER before sending the request body.
+      // Only send cleaned items (no fully-empty placeholder rows, and no incomplete rows).
+      const itemsPayload = Array.isArray(cleanedItems)
+        ? cleanedItems.map((row, idx) => ({
+            item_no: idx + 1,
+            item_name: row.item_name,
+            reference_no: row.reference_no || null,
+            quantity: Number(row.quantity),
+          }))
+        : []
+
+
       let res
       if (isEditingDraft) {
         res = await fetch(`${base}/api/job-orders/${draftId}`, {
@@ -521,9 +580,10 @@ export default function CreateJO() {
             status,
             sender_id: user?.id || null,
             receiver_id: selectedTechnicianId,
-            items,
-            personnel,
+            items: itemsPayload,
+            personnel: cleanedPersonnel,
             allow_insufficient_stock: allowInsufficientStock,
+
           }),
         })
       }
@@ -594,10 +654,22 @@ export default function CreateJO() {
                 <input value={date} onChange={(e) => setDate(e.target.value)} type="date" className="w-full rounded-2xl border-[1.5px] border-[#cbd5e1] bg-[#f8fafc] px-4 py-3 text-sm outline-none placeholder:text-gray-400 focus:border-black" />
               </div>
 
-              <div className="rounded-2xl border border-gray-200 bg-white px-4 py-4">
+            <div className="rounded-2xl border border-gray-200 bg-white px-4 py-4">
                 <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Location</label>
-                <input value={location} onChange={(e) => setLocation(e.target.value)} type="text" placeholder="Enter location" className="w-full rounded-2xl border-[1.5px] border-[#cbd5e1] bg-[#f8fafc] px-4 py-3 text-sm outline-none placeholder:text-gray-400 focus:border-black" />
+                <input
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  type="text"
+                  placeholder="Enter location"
+                  className={`w-full rounded-2xl border-[1.5px] bg-[#f8fafc] px-4 py-3 text-sm outline-none placeholder:text-gray-400 focus:border-black ${
+                    error === 'Location is required.' ? 'border-red-400' : 'border-[#cbd5e1]'
+                  }`}
+                />
+                {error === 'Location is required.' ? (
+                  <p className="mt-2 text-xs font-medium text-red-700">Location is required.</p>
+                ) : null}
               </div>
+
 
               <div className="rounded-2xl border border-gray-200 bg-white px-4 py-4">
                 <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Assign To</label>
