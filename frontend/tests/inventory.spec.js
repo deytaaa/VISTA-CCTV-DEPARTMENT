@@ -1,4 +1,3 @@
-
 import { test, expect } from '@playwright/test'
 import fs from 'fs'
 
@@ -80,101 +79,35 @@ test.describe('Inventory Management', () => {
     const timestamp = Date.now()
     const itemName = `Test Item ${timestamp}`
 
-    // Fill item name - wait for it to appear
-    const itemNameInput = page
-      .locator(
-        'input[placeholder*="Item name" i], input[placeholder*="item name" i], input[placeholder*="Name" i]'
-      )
+    await page.waitForTimeout(1000)
+
+    // Use the fixed modal container directly
+    const modal = page
+      .locator('div.fixed, [role="dialog"]')
+      .filter({ hasText: 'Add New Item' })
       .last()
-    await itemNameInput.waitFor({ state: 'visible', timeout: 10000 })
-    await itemNameInput.fill(itemName)
-    await page.waitForTimeout(300)
 
-    // Select unit
-    const unitSelect = page.locator('select').last()
-    await unitSelect.selectOption('pieces')
-    await page.waitForTimeout(300)
+    await expect(modal).toBeVisible({ timeout: 10000 })
 
-    // NOTE: Current Stock is readOnly in the UI; do NOT attempt to fill it.
+    // Fill Item Name - scope to modal
+    await modal.locator('input').first().fill(itemName)
 
-    // Fill minimum stock
-    const minStockInput = page
-      .locator('label:has-text("Minimum Stock"), label:has-text("Minimum");')
-      .first();
+    // Fill Description
+    await modal.locator('textarea').first().fill('Test description')
 
-    const minStockField = page.locator('input[type="number"]').filter({ hasNot: page.locator('[readonly], [disabled]') }).last()
-    await expect(minStockField).toBeVisible({ timeout: 10000 })
-    await minStockField.fill('10')
+    // Fill Minimum Stock
+    await modal.locator('input[type="number"]:not([readonly])').first().fill('10')
+
+    // Click Save
+    await modal.getByRole('button', { name: 'Save' }).click()
 
 
-    // Monitor inventory API response
-    page.on('response', response => {
-      if (response.url().includes('/api/inventory')) {
-        console.log('INVENTORY API URL:', response.url())
-        console.log('INVENTORY API STATUS:', response.status())
-        response.text().then(text => console.log('INVENTORY API BODY:', text.substring(0, 500)))
-      }
-    })
-
-    // Submit form
-    // Dump ALL visible input attributes to find correct selectors
-    const inputs = page.locator('input:visible, select:visible, textarea:visible')
-    const count = await inputs.count()
-    for (let i = 0; i < count; i++) {
-      const el = inputs.nth(i)
-      const name = await el.getAttribute('name').catch(() => '')
-      const type = await el.getAttribute('type').catch(() => '')
-      const placeholder = await el.getAttribute('placeholder').catch(() => '')
-      const id = await el.getAttribute('id').catch(() => '')
-      console.log(`INPUT ${i}: name="${name}" type="${type}" placeholder="${placeholder}" id="${id}"`)
-    }
-
-    // Step 1 — After opening the modal, dump all visible button texts + take screenshot
-    const allButtons = await page.locator('button:visible').allTextContents()
-    console.log('VISIBLE BUTTONS (Add New Item Modal):', allButtons)
-    await page.screenshot({
-      path: 'test-results/debug-add-item-modal-buttons.png',
-      fullPage: true,
-    })
-
-    // Step 2 — Click exact modal submit button
-    await page.getByRole('button', { name: 'Save' }).click({ force: true })
-
-
-    await page.waitForTimeout(3000)
-
-    const nameVal = await page.locator('input[name="name"], input[placeholder*="Item name" i]').last().inputValue().catch(() => 'not found')
-    const emailVal = await page.locator('input[type="email"]').inputValue().catch(() => 'not found')
-    const passVal = await page.locator('input[type="password"]').inputValue().catch(() => 'not found')
-    const roleVal = await page.locator('select').last().inputValue().catch(() => 'not found')
-    console.log('FORM VALUES:', { nameVal, emailVal, passVal, roleVal })
-
-
-
-    await page.screenshot({ path: 'test-results/debug-create-item-after-submit.png', fullPage: true })
-
-
-
-
-    // Verify item appears in table directly
-    const itemRow = page.locator('table tbody tr').filter({ has: page.locator(`td:has-text("${itemName}")`) }).first()
-    await expect(itemRow).toBeVisible({ timeout: 20000 }).catch(async () => {
-      const rows = await page.locator('table tbody tr').allTextContents()
-      console.log('TABLE ROWS:', rows)
-      throw new Error('Item not found in table after Save')
-    })
-
-
-    // Verify item appears in table directly
-    const itemRow2 = page.locator('table tbody tr').filter({ has: page.locator(`td:has-text("${itemName}")`) }).first()
-    await expect(itemRow2).toBeVisible({ timeout: 20000 }).catch(async () => {
-      const rows = await page.locator('table tbody tr').allTextContents()
-      console.log('TABLE ROWS:', rows)
-      throw new Error('Item not found in table after Save')
-    })
-
-
-
+    // Wait and verify
+    await page.waitForLoadState('networkidle')
+    await page.waitForTimeout(2000)
+    await expect(
+      page.locator('table tbody tr').filter({ has: page.locator(`td:has-text("${itemName}")`) }).first()
+    ).toBeVisible({ timeout: 15000 })
   })
 
   test('Click Add Stock on an item → enter quantity and remarks → should update current stock', async ({
