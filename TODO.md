@@ -1,10 +1,13 @@
-# TODO — README updates
+# TODO
 
-- [x] Gather repository context (read existing READMEs + inspect backend routes and key frontend pages).
-- [x] Update root README.md with full project overview, roles, SQL setup order (000-004 + required ALTER TABLE/soft delete), seed scripts + commands, env vars (backend+frontend), deployment notes (Vercel + Render), features list, and security checklist. Remove AI assistant leftovers.
-- [x] Update backend/README.md with concise backend setup, env vars, middleware explanation, and API routes grouped by module.
-- [x] Update frontend/README.md with concise frontend setup, env vars, Next.js version, pages grouped by role, deployment note about Supabase Realtime polling (~30s) instead of WebSockets on Vercel.
-- [ ] Verify READMEs have no placeholder text or AI assistant messages.
+## Playwright fixes (selectors + flaky navigation)
+- [x] Insert full visible input attribute dump in failing modal tests:
+  - [x] Admin: "Create a new technician user" modal (admin.spec.js)
+  - [x] Admin: "Deactivate a user" modal (admin.spec.js)
+  - [x] Inventory: "Add a new item..." modal (inventory.spec.js)
+- [x] Prevent "page has been closed" around "Create User" click by accepting dialogs:
+  - [x] Add `page.on('dialog', dialog => dialog.accept())` immediately before the "Create User" button click in both admin modal tests.
 
-
+- [ ] Do not modify passing test: "Create a new JO" (admin.spec.js line ~25)
+- [ ] Re-run Playwright tests to confirm the 3 previously failing tests now pass and no others regress.
 
