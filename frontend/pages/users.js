@@ -136,7 +136,7 @@ export default function UsersPage() {
       return matchesSearch && matchesRole && matchesStatus
 
     })
-  }, [users, search, roleFilter])
+  }, [users, search, roleFilter, statusFilter])
 
   function openCreate() {
     setCreateForm({ name: '', email: '', password: '', role: 'technician' })
@@ -361,7 +361,9 @@ export default function UsersPage() {
                 <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">Status</label>
                 <select
                   value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
+                  onChange={(e) => {
+                    setStatusFilter(e.target.value)
+                  }}
                   className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-black"
                 >
                   <option value="all">All</option>
@@ -375,6 +377,7 @@ export default function UsersPage() {
                 onClick={() => {
                   setSearch('')
                   setRoleFilter('')
+                  setStatusFilter('all')
                 }}
                 className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-semibold text-black hover:bg-gray-50"
               >
@@ -391,6 +394,8 @@ export default function UsersPage() {
           </div>
 
           <section className="rounded-[24px] border border-gray-200 bg-white p-5 shadow-sm">
+            <p style={{ color: 'red' }}>
+            </p>
             <div className="overflow-x-auto">
               <table className="min-w-full text-left text-sm">
                 <thead className="bg-[#FFF0F0] text-gray-700">
