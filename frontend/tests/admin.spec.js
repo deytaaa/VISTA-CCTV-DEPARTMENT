@@ -107,7 +107,7 @@ test.describe('Admin Dashboard', () => {
   test('Create a new JO with location, date, inventory item, and assigned technician → should show success toast with JO number', async ({
     page,
   }) => {
-    test.setTimeout(30000)
+    test.setTimeout(90000) // extended to allow inventory options to load
 
     await page.goto(`${BASE_URL}/jo/create`)
     await page.waitForLoadState('networkidle')
@@ -127,12 +127,76 @@ test.describe('Admin Dashboard', () => {
     await expect(technicianSelect).toBeEnabled({ timeout: 10000 })
     await technicianSelect.selectOption({ index: 1 })
 
-    // Wait for inventory dropdown to load then select first item
-    const inventorySelect = page.locator('select').filter({
+    // Wait for inventory dropdown to load then select first item.
+    // The dropdown starts with only the placeholder "Select item" option
+    // when there are no inventory items in the DB yet. We poll until a
+    // real selectable option appears (index 1+) so this test can run
+    // immediately after inventory items are seeded by the inventory tests
+    // without relying on a fixed sleep.
+    // Reload the page until inventory dropdown has real options (fresh DB starts empty).
+    // Then pick the first item with sufficient stock — items at 0 block form submission.
+    let inventorySelect = page.locator('select').filter({
       has: page.locator('option:has-text("Select item")'),
     }).first()
+
+    let inventoryOptionCount = await inventorySelect.locator('option').count().catch(() => 0)
+    let reloadAttempts = 0
+    const maxReloads = 10
+
+    while (inventoryOptionCount <= 1 && reloadAttempts < maxReloads) {
+      console.log('Inventory dropdown has ' + inventoryOptionCount + ' option(s) — reloading page (attempt ' + (reloadAttempts + 1) + '/' + maxReloads + ')')
+      await page.waitForTimeout(3000)
+      await page.goto(BASE_URL + '/jo/create')
+      await page.waitForLoadState('networkidle')
+      await page.waitForTimeout(1000)
+
+      // Re-fill fields lost on reload
+      await page.fill('input[placeholder*="location" i]', 'Building A, Floor 2')
+      const dateInputR = page.locator('input[type="date"]')
+      if ((await dateInputR.count()) > 0) {
+        await dateInputR.first().fill(new Date().toISOString().split('T')[0])
+      }
+      const techSelectR = page.locator('select').filter({
+        has: page.locator('option:has-text("Select a technician")'),
+      }).first()
+      if ((await techSelectR.count()) > 0) {
+        await expect(techSelectR).toBeEnabled({ timeout: 10000 })
+        await techSelectR.selectOption({ index: 1 })
+      }
+
+      inventorySelect = page.locator('select').filter({
+        has: page.locator('option:has-text("Select item")'),
+      }).first()
+      inventoryOptionCount = await inventorySelect.locator('option').count().catch(() => 0)
+      reloadAttempts++
+    }
+
+    if (inventoryOptionCount <= 1) {
+      throw new Error('Inventory dropdown still empty after ' + maxReloads + ' reloads. Ensure inventory tests ran first.')
+    }
+
+    // Try each item — skip any showing 'Insufficient stock'
     await expect(inventorySelect).toBeEnabled({ timeout: 10000 })
-    await inventorySelect.selectOption({ index: 1 })
+    const invOptions = await inventorySelect.locator('option').all()
+    let selectedGoodItem = false
+    for (let i = 1; i < invOptions.length; i++) {
+      await inventorySelect.selectOption({ index: i })
+      await page.waitForTimeout(1500)
+      await page.locator('text=/available:|insufficient stock/i').first()
+        .waitFor({ state: 'visible', timeout: 3000 })
+        .catch(() => null)
+      const isInsufficient = await page.locator('text=/insufficient stock/i').first().isVisible().catch(() => false)
+      if (!isInsufficient) {
+        console.log('Selected inventory item at index ' + i)
+        selectedGoodItem = true
+        break
+      }
+      console.warn('Item at index ' + i + ' has insufficient stock — trying next')
+    }
+
+    if (!selectedGoodItem) {
+      throw new Error('All inventory items have insufficient stock. Add stock to at least one item before running this test.')
+    }
 
     // The app now validates that every Supplies & Equipment row with an
     // item selected must also have a valid quantity > 0 — selecting an
