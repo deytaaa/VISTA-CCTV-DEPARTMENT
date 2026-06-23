@@ -102,12 +102,33 @@ test.describe('Inventory Management', () => {
     await modal.getByRole('button', { name: 'Save' }).click()
 
 
-    // Wait and verify
+    // Wait and verify item appears in table
     await page.waitForLoadState('networkidle')
     await page.waitForTimeout(2000)
-    await expect(
-      page.locator('table tbody tr').filter({ has: page.locator(`td:has-text("${itemName}")`) }).first()
-    ).toBeVisible({ timeout: 15000 })
+    const newItemRow = page.locator('table tbody tr').filter({ has: page.locator(`td:has-text("${itemName}")`) }).first()
+    await expect(newItemRow).toBeVisible({ timeout: 15000 })
+
+    // Immediately add stock to this item so admin's Create JO test can select it.
+    // The Add Stock test below runs on 'first row' which may not be this item.
+    const addStockBtn = newItemRow.locator('button:has-text("Add Stock"), button:has-text("Add"), [title*="Add"]').first()
+    await addStockBtn.click()
+    await page.waitForTimeout(1000)
+
+    const qtyInput = page.locator('input[placeholder*="quantity" i], input[type="number"]').first()
+    await expect(qtyInput).toBeVisible({ timeout: 5000 })
+    await qtyInput.fill('50')
+
+    const remarksInput = page.locator('textarea[name="remarks"], input[placeholder*="remark" i], textarea').first()
+    if ((await remarksInput.count()) > 0) {
+      await remarksInput.fill('Initial stock for testing')
+    }
+
+    const saveBtn = page.locator('button:has-text("Save"), button:has-text("Confirm"), button:has-text("Add")').last()
+    await saveBtn.click()
+
+    const successToast = page.locator('text=/success|updated|saved/i').first()
+    await expect(successToast).toBeVisible({ timeout: 10000 })
+    console.log('Stock added to newly created item: ' + itemName)
   })
 
   test('Click Add Stock on an item → enter quantity and remarks → should update current stock', async ({
