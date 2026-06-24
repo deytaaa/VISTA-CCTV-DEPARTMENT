@@ -424,7 +424,7 @@ export default function InventoryPage() {
                     <th className="px-4 py-3">Unit</th>
                     <th className="px-4 py-3">Current Stock</th>
                     <th className="px-4 py-3">Min Stock</th>
-                    <th className="px-4 py-3">Status</th>
+                    <th className="px-8 py-3">Status</th>
                     <th className="px-4 py-3">Actions</th>
                   </tr>
                 </thead>
