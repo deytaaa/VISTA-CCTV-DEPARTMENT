@@ -158,6 +158,7 @@ export default function JOListPage({
   const [cameraOpen, setCameraOpen] = useState(false)
   const [cameraError, setCameraError] = useState('')
   const [cameraFacingMode, setCameraFacingMode] = useState('environment')
+  const [confirmApprovalId, setConfirmApprovalId] = useState(null)
 
   const totalPages = useMemo(() => Math.max(1, Math.ceil((total || 0) / limit)), [limit, total])
   const startRow = total === 0 ? 0 : (page - 1) * limit + 1
@@ -364,10 +365,15 @@ export default function JOListPage({
     return payload
   }
 
-  async function handleSubmitForApproval(jobOrderId) {
+  function handleSubmitForApproval(jobOrderId) {
     if (!session?.access_token) return
+    setConfirmApprovalId(jobOrderId)
+  }
 
-    if (!window.confirm('Submit this job order for approval?')) return
+  async function confirmSubmitForApproval() {
+    const jobOrderId = confirmApprovalId
+    setConfirmApprovalId(null)
+    if (!jobOrderId) return
 
     setError(null)
     setActionLoadingId(jobOrderId)
@@ -1489,6 +1495,33 @@ export default function JOListPage({
             </div>
           ) : null}
 
+          {confirmApprovalId ? (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6">
+              <div className="w-full max-w-sm rounded-[24px] bg-white p-6 shadow-2xl">
+                <h3 className="text-lg font-bold text-black">Submit for Approval</h3>
+                <p className="mt-2 text-sm text-gray-500">Are you sure you want to submit this job order for approval? This will notify the admin for review.</p>
+                <div className="mt-6 flex items-center justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setConfirmApprovalId(null)}
+                    disabled={!!actionLoadingId}
+                    className="rounded-2xl border border-gray-200 px-4 py-2 text-sm font-semibold text-black disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={confirmSubmitForApproval}
+                    disabled={!!actionLoadingId}
+                    className="rounded-2xl bg-taguigRed px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {actionLoadingId ? 'Submitting…' : 'Confirm'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
           {cameraOpen ? (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6">
               <div className="w-full max-w-2xl rounded-[24px] bg-white p-5 shadow-2xl">
@@ -1545,4 +1578,3 @@ export default function JOListPage({
     </ProtectedRoute>
   )
 }
-
