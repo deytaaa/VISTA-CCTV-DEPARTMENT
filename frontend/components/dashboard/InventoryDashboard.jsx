@@ -221,7 +221,7 @@ export default function InventoryDashboard() {
                           <td className="px-4 py-3">
                             <span className={`font-semibold ${isIn ? 'text-emerald-700' : 'text-red-700'}`}>{signedQty}</span>
                           </td>
-                          <td className="px-4 py-3 text-gray-700">{tx?.job_order?.jo_number || '—'}</td>
+                          <td className="px-4 py-3 text-gray-700">{tx?.job_orders?.jo_number || '—'}</td>
                           <td className="px-4 py-3 text-gray-700">{tx?.performer?.name || '—'}</td>
 
                         </tr>
