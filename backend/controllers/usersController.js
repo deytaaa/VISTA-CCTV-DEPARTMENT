@@ -33,22 +33,45 @@ module.exports = {
 
     try {
       // Join public.users profile table
-      const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
-      if (authError) return res.status(500).json({ error: authError.message || authError });
+      // This asked for a single page of 1000 and used whatever came back, so
+      // user number 1001 onwards silently vanished from User Management with no
+      // error. Page through until a short page signals the end.
+      const AUTH_PAGE_SIZE = 200;
+      const AUTH_PAGE_LIMIT = 50; // hard stop at 10,000 users so a bad response cannot loop forever
+      const authUserList = [];
 
-      const authUserList = Array.isArray(authUsers?.users) ? authUsers.users : [];
+      for (let page = 1; page <= AUTH_PAGE_LIMIT; page += 1) {
+        const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers({
+          page,
+          perPage: AUTH_PAGE_SIZE,
+        });
+
+        if (authError) return res.status(500).json({ error: authError.message || authError });
+
+        const batch = Array.isArray(authUsers?.users) ? authUsers.users : [];
+        authUserList.push(...batch);
+
+        if (batch.length < AUTH_PAGE_SIZE) break;
+      }
+
       const userIds = authUserList.map((u) => u.id);
 
       if (userIds.length === 0) return res.json({ data: [] });
 
-      const { data: profileRows, error: profileError } = await supabase
-        .from('users')
-        .select('id, name, email, role, created_at, is_active')
-        .in('id', userIds);
+      // Chunked because .in() interpolates every id into the query string, and a
+      // few thousand UUIDs exceeds what the server will accept as a URL.
+      const PROFILE_CHUNK = 200;
+      const profileRows = [];
 
+      for (let i = 0; i < userIds.length; i += PROFILE_CHUNK) {
+        const { data: chunk, error: profileError } = await supabase
+          .from('users')
+          .select('id, name, email, role, created_at, is_active')
+          .in('id', userIds.slice(i, i + PROFILE_CHUNK));
 
-
-      if (profileError) return res.status(500).json({ error: profileError.message || profileError });
+        if (profileError) return res.status(500).json({ error: profileError.message || profileError });
+        if (Array.isArray(chunk)) profileRows.push(...chunk);
+      }
 
       const profilesById = new Map((Array.isArray(profileRows) ? profileRows : []).map((row) => [row.id, row]));
 
