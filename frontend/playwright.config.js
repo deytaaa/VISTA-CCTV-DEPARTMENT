@@ -58,5 +58,14 @@ export default defineConfig({
       dependencies: ["chain-technician"],
       use: { ...devices["Desktop Chrome"] },
     },
+    // Last — API-level security checks. These hit the API directly rather than
+    // driving the browser, and the rate limiting test deliberately exhausts the
+    // burst window, so nothing may run after them.
+    {
+      name: "security",
+      testMatch: "**/security.spec.js",
+      dependencies: ["others"],
+      use: { ...devices["Desktop Chrome"] },
+    },
   ],
 });
