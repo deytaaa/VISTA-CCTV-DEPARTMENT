@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/router'
 import ProtectedRoute from '../../../components/ProtectedRoute'
@@ -97,18 +97,8 @@ export default function JobOrderViewPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [jobOrder, setJobOrder] = useState(null)
-  const [proofFile, setProofFile] = useState(null)
-  const [proofPreview, setProofPreview] = useState(null)
-  const [proofRemarks, setProofRemarks] = useState('')
-  const [proofLoading, setProofLoading] = useState(false)
   const [actionLoading, setActionLoading] = useState(false)
   const [actionError, setActionError] = useState('')
-  const fileInputRef = useRef(null)
-  const cameraVideoRef = useRef(null)
-  const cameraStreamRef = useRef(null)
-  const [cameraOpen, setCameraOpen] = useState(false)
-  const [cameraError, setCameraError] = useState('')
-  const [cameraFacingMode, setCameraFacingMode] = useState('environment')
 
   const latestReport = useMemo(() => latestCompletionReport(jobOrder), [jobOrder])
   const proofUrl = useMemo(() => {
@@ -125,58 +115,10 @@ export default function JobOrderViewPage() {
 
   const isTechnician = role === 'technician'
   const status = (jobOrder?.status || '').toLowerCase()
-  const canUploadProof = isTechnician && status === 'processing'
   const canMarkProcessing = isTechnician && status === 'sent'
   const isProcessingOrBeyond = ['processing', 'completed', 'for_approval', 'approved', 'rejected'].includes(status)
   const rejectionRemarks = jobOrder?.rejection_remarks?.trim()
   const approvalTimestamp = jobOrder?.updated_at ? formatDateTime(jobOrder.updated_at) : '—'
-
-  useEffect(() => {
-    return () => {
-      if (proofPreview?.url) {
-        URL.revokeObjectURL(proofPreview.url)
-      }
-
-      if (cameraStreamRef.current) {
-        cameraStreamRef.current.getTracks().forEach((track) => track.stop())
-        cameraStreamRef.current = null
-      }
-    }
-  }, [proofPreview])
-
-  useEffect(() => {
-    if (!cameraOpen) return undefined
-
-    let cancelled = false
-
-    async function startCamera() {
-      try {
-        setCameraError('')
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: cameraFacingMode } },
-          audio: false,
-        })
-
-        if (cancelled) {
-          stream.getTracks().forEach((track) => track.stop())
-          return
-        }
-
-        cameraStreamRef.current = stream
-        if (cameraVideoRef.current) {
-          cameraVideoRef.current.srcObject = stream
-        }
-      } catch (cameraLoadError) {
-        setCameraError('Camera access is not available. Please use Choose File instead.')
-      }
-    }
-
-    startCamera()
-
-    return () => {
-      cancelled = true
-    }
-  }, [cameraFacingMode, cameraOpen])
 
   useEffect(() => {
     let mounted = true
@@ -231,141 +173,6 @@ export default function JobOrderViewPage() {
     setJobOrder(data || null)
   }
 
-  function handleFileSelect(event) {
-    const file = event.target.files?.[0] || null
-
-    if (proofPreview?.url) {
-      URL.revokeObjectURL(proofPreview.url)
-    }
-
-    if (!file) {
-      setProofFile(null)
-      setProofPreview(null)
-      return
-    }
-
-    const allowedTypes = ['image/jpeg', 'image/png', 'application/pdf']
-    if (!allowedTypes.includes(file.type)) {
-      setActionError('Only JPG, PNG, and PDF files are allowed.')
-      event.target.value = ''
-      setProofFile(null)
-      setProofPreview(null)
-      return
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      setActionError('File too large. Maximum size is 5MB.')
-      event.target.value = ''
-      setProofFile(null)
-      setProofPreview(null)
-      return
-    }
-
-    setActionError('')
-    setProofFile(file)
-
-    if (file.type === 'application/pdf') {
-      setProofPreview({ type: 'pdf', name: file.name })
-    } else {
-      setProofPreview({ type: 'image', name: file.name, url: URL.createObjectURL(file) })
-    }
-  }
-
-  function openCameraCapture() {
-    setCameraError('')
-    setCameraFacingMode('environment')
-    setCameraOpen(true)
-  }
-
-  function switchCameraFacingMode() {
-    const nextFacingMode = cameraFacingMode === 'environment' ? 'user' : 'environment'
-
-    if (cameraStreamRef.current) {
-      cameraStreamRef.current.getTracks().forEach((track) => track.stop())
-      cameraStreamRef.current = null
-    }
-
-    if (cameraVideoRef.current) {
-      cameraVideoRef.current.srcObject = null
-    }
-
-    setCameraError('')
-    setCameraFacingMode(nextFacingMode)
-    setCameraOpen(true)
-  }
-
-  function openFilePicker() {
-    fileInputRef.current?.click()
-  }
-
-  function closeCameraCapture() {
-    if (cameraStreamRef.current) {
-      cameraStreamRef.current.getTracks().forEach((track) => track.stop())
-      cameraStreamRef.current = null
-    }
-
-    if (cameraVideoRef.current) {
-      cameraVideoRef.current.srcObject = null
-    }
-
-    setCameraError('')
-    setCameraOpen(false)
-  }
-
-  async function capturePhoto() {
-    const video = cameraVideoRef.current
-    const stream = cameraStreamRef.current
-
-    if (!video || !stream) {
-      setCameraError('Camera is not ready yet.')
-      return
-    }
-
-    const width = video.videoWidth || 1280
-    const height = video.videoHeight || 720
-    const canvas = document.createElement('canvas')
-    canvas.width = width
-    canvas.height = height
-
-    const context = canvas.getContext('2d')
-    if (!context) {
-      setCameraError('Unable to capture photo.')
-      return
-    }
-
-    context.drawImage(video, 0, 0, width, height)
-
-    canvas.toBlob((blob) => {
-      if (!blob) {
-        setCameraError('Unable to capture photo.')
-        return
-      }
-
-      const file = new File([blob], `proof-${Date.now()}.jpg`, { type: 'image/jpeg' })
-
-      if (proofPreview?.url) {
-        URL.revokeObjectURL(proofPreview.url)
-      }
-
-      setActionError('')
-      setProofFile(file)
-      setProofPreview({ type: 'image', name: file.name, url: URL.createObjectURL(file) })
-      closeCameraCapture()
-    }, 'image/jpeg', 0.92)
-  }
-
-  function retakePhoto() {
-    if (proofPreview?.url) {
-      URL.revokeObjectURL(proofPreview.url)
-    }
-
-    setProofFile(null)
-    setProofPreview(null)
-    setCameraFacingMode('environment')
-    setCameraError('')
-    setCameraOpen(true)
-  }
-
   async function markProcessing() {
     if (!session?.access_token || !jobOrder?.id) return
 
@@ -390,84 +197,6 @@ export default function JobOrderViewPage() {
       setActionError(requestError.message)
     } finally {
       setActionLoading(false)
-    }
-  }
-
-  async function uploadProofAndSave() {
-    if (!session?.access_token || !jobOrder?.id) return
-
-    if (!proofFile) {
-      setActionError('Please choose a proof file first.')
-      return
-    }
-
-    if (!proofRemarks.trim()) {
-      setActionError('Please enter completion remarks.')
-      return
-    }
-
-    const allowedTypes = ['image/jpeg', 'image/png', 'application/pdf']
-    if (!allowedTypes.includes(proofFile.type)) {
-      setActionError('Only JPG, PNG, and PDF files are allowed.')
-      return
-    }
-
-    if (proofFile.size > 5 * 1024 * 1024) {
-      setActionError('Proof file must be 5MB or smaller.')
-      return
-    }
-
-    setActionError('')
-    setProofLoading(true)
-
-    try {
-      const formData = new FormData()
-      formData.append('file', proofFile)
-
-      const uploadResponse = await fetch(`${API_BASE_URL}/api/jo/upload-proof`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: formData,
-      })
-
-      const uploadPayload = await uploadResponse.json()
-      if (!uploadResponse.ok) {
-        throw new Error(uploadPayload?.error || 'Failed to upload proof')
-      }
-
-      const completionResponse = await fetch(`${API_BASE_URL}/api/completion`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({
-          job_order_id: jobOrder.id,
-          proof_file: uploadPayload?.publicURL || uploadPayload?.path,
-          previousProofFile: latestReport?.proof_file || null,
-          remarks: proofRemarks.trim(),
-          completed_at: new Date().toISOString(),
-        }),
-      })
-
-      const completionPayload = await completionResponse.json()
-      if (!completionResponse.ok) {
-        throw new Error(completionPayload?.error || 'Failed to save completion report')
-      }
-
-      setProofFile(null)
-      if (proofPreview?.url) {
-        URL.revokeObjectURL(proofPreview.url)
-      }
-      setProofPreview(null)
-      setProofRemarks('')
-      await refreshJobOrder()
-    } catch (saveError) {
-      setActionError(saveError.message)
-    } finally {
-      setProofLoading(false)
     }
   }
 
@@ -572,60 +301,6 @@ export default function JobOrderViewPage() {
               ) : (
                 <p className="mt-4 text-sm text-gray-500">No completion report has been uploaded yet.</p>
               )}
-
-              {/* Upload handled via Job Orders actions; technicians upload from the table only. */}
-
-              {cameraOpen ? (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6">
-                  <div className="w-full max-w-2xl rounded-[24px] bg-white p-5 shadow-2xl">
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <h3 className="text-lg font-bold text-black">Take Photo</h3>
-                        <p className="text-sm text-gray-500">Point the camera at the proof and capture it.</p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={switchCameraFacingMode}
-                          className="rounded-full border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-black hover:bg-gray-50"
-                        >
-                          {cameraFacingMode === 'environment' ? 'Front Camera' : 'Back Camera'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={closeCameraCapture}
-                          className="rounded-full border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-black hover:bg-gray-50"
-                        >
-                          Close
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="mt-4 overflow-hidden rounded-2xl border border-gray-200 bg-black">
-                      <video ref={cameraVideoRef} autoPlay playsInline className="h-[360px] w-full object-cover" />
-                    </div>
-
-                    {cameraError ? <p className="mt-3 text-sm text-red-600">{cameraError}</p> : null}
-
-                    <div className="mt-4 flex items-center justify-end gap-3">
-                      <button
-                        type="button"
-                        onClick={closeCameraCapture}
-                        className="rounded-2xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-gray-50"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="button"
-                        onClick={capturePhoto}
-                        className="rounded-2xl bg-taguigRed px-4 py-2 text-sm font-semibold text-white transition hover:bg-taguigDark"
-                      >
-                        Capture Photo
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ) : null}
             </section>
           ) : null}
         </div>
