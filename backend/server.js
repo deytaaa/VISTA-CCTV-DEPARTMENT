@@ -3,6 +3,7 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const helmet = require('helmet');
+const compression = require('compression');
 const { burstLimiter, sustainedLimiter, accountLimiter } = require('./middleware/rateLimit');
 const joRoutes = require('./routes/jo');
 const authRoutes = require('./routes/auth');
@@ -37,6 +38,9 @@ app.use(
 );
 
 app.use(cors());
+// List payloads are JSON-heavy and highly compressible (~12.6KB per page of 10
+// job orders uncompressed).
+app.use(compression());
 app.use(bodyParser.json());
 
 // Health must stay reachable for uptime checks, so it is registered before the
