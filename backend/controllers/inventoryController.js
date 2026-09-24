@@ -1,6 +1,10 @@
 const supabase = require('../lib/supabase')
 const { previewInventoryUsage } = require('../lib/inventory')
 
+// Stock levels move only through addStock/stockOut so the transaction log
+// stays truthful; current_stock is deliberately absent from this list.
+const INVENTORY_UPDATABLE_COLUMNS = ['item_name', 'description', 'unit', 'minimum_stock']
+
 module.exports = {
   list: async (req, res) => {
     try {
@@ -139,7 +143,15 @@ module.exports = {
     try {
       const { id } = req.params
       const payload = req.body || {}
-      const { data, error } = await supabase.from('inventory_items').update({ ...payload, updated_at: new Date().toISOString() }).eq('id', id).select('*').single()
+      // Whitelist the editable columns. Spreading the body let a caller set
+      // current_stock directly, bypassing the stock-in/stock-out audit trail.
+      const updateObj = { updated_at: new Date().toISOString() }
+      for (const column of INVENTORY_UPDATABLE_COLUMNS) {
+        if (Object.prototype.hasOwnProperty.call(payload, column)) {
+          updateObj[column] = payload[column]
+        }
+      }
+      const { data, error } = await supabase.from('inventory_items').update(updateObj).eq('id', id).select('*').single()
       if (error) return res.status(500).json({ error: error.message || error })
       return res.json({ data })
     } catch (err) {
