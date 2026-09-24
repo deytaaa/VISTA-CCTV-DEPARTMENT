@@ -65,5 +65,31 @@ app.use('/api/job-orders', jobOrdersRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/inventory', inventoryRoutes);
 
+// Unknown API paths should answer in JSON like everything else, not fall
+// through to Express's HTML 404.
+app.use('/api', (req, res) => {
+  res.status(404).json({ error: 'Not found' });
+});
+
+// Final error handler. Without one, an unexpected throw (or a malformed JSON
+// body) returns Express's default HTML error page — complete with a stack
+// trace in development — to a client that is expecting JSON.
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+  // A body-parser failure is the client's fault, not a server fault.
+  if (err?.type === 'entity.parse.failed' || err instanceof SyntaxError) {
+    return res.status(400).json({ error: 'Invalid JSON body.' });
+  }
+  if (err?.type === 'entity.too.large') {
+    return res.status(413).json({ error: 'Request body too large.' });
+  }
+
+  console.error('Unhandled error:', err);
+
+  // Never send the message or stack to the client; it can carry internals.
+  const status = Number.isInteger(err?.status) && err.status >= 400 ? err.status : 500;
+  return res.status(status).json({ error: 'Something went wrong. Please try again.' });
+});
+
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => console.log(`Backend listening on port ${PORT}`));
