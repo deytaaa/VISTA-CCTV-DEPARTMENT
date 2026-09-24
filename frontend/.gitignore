@@ -1,3 +1,8 @@
 .next/
 node_modules/
 .env.local
+
+# Playwright output (regenerated every run)
+test-results/
+playwright-report/
+playwrighttestfailed.md
