@@ -4,18 +4,19 @@ async function notifyUsers(userIds, notification) {
   const uniqueIds = [...new Set((userIds || []).filter(Boolean))];
   if (uniqueIds.length === 0) return;
 
-  await Promise.all(
-    uniqueIds.map((userId) =>
-      supabase.from('notifications').insert({
-        user_id: userId,
-        job_order_id: notification.jobOrderId,
-        title: notification.title,
-        message: notification.message,
-        is_read: false,
-        created_at: new Date().toISOString(),
-      })
-    )
-  );
+  const now = new Date().toISOString();
+  const rows = uniqueIds.map((userId) => ({
+    user_id: userId,
+    job_order_id: notification.jobOrderId,
+    title: notification.title,
+    message: notification.message,
+    is_read: false,
+    created_at: now,
+  }));
+
+  // One insert instead of one HTTP round trip per recipient.
+  const { error: insertError } = await supabase.from('notifications').insert(rows);
+  if (insertError) console.warn('Failed to insert notifications', insertError);
 }
 
 // The only job_orders columns PUT /api/approval/:id may write.
@@ -137,7 +138,13 @@ module.exports = {
         return res.status(400).json({ error: 'A rejection reason is required' });
       }
 
-      const { data, error } = await supabase
+      // Guard the write on the status the decision was based on. Without it two
+      // admins clicking Approve at the same moment both pass the check above,
+      // both write, and both fire notifications.
+      const allowedFromStatuses =
+        normalizedAction === 'request_approval' ? ['processing', 'rejected'] : ['for_approval'];
+
+      const { data: updatedRows, error } = await supabase
         .from('job_orders')
         .update({
           status: newStatus,
@@ -145,10 +152,16 @@ module.exports = {
           updated_at: new Date().toISOString(),
         })
         .eq('id', job_order_id)
-        .select('*')
-        .single();
+        .in('status', allowedFromStatuses)
+        .select('*');
 
       if (error) return res.status(500).json({ error: error.message || error });
+
+      if (!Array.isArray(updatedRows) || updatedRows.length === 0) {
+        return res.status(409).json({ error: 'This job order was already updated. Please refresh.' });
+      }
+
+      const data = updatedRows[0];
 
       const activityAction =
         normalizedAction === 'request_approval'

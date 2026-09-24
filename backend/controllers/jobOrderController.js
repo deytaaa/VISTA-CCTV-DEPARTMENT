@@ -54,18 +54,23 @@ async function notifyAdmins({ jobOrderId, title, message }) {
   const { data: admins, error } = await supabase.from('users').select('id').eq('role', 'admin');
   if (error || !Array.isArray(admins) || admins.length === 0) return;
 
-  await Promise.all(
-    admins.map((admin) =>
-      supabase.from('notifications').insert({
-        user_id: admin.id,
-        job_order_id: jobOrderId,
-        title,
-        message,
-        is_read: false,
-        created_at: new Date().toISOString(),
-      })
-    )
-  );
+  const now = new Date().toISOString();
+  const rows = admins
+    .map((admin) => admin.id)
+    .filter(Boolean)
+    .map((userId) => ({
+      user_id: userId,
+      job_order_id: jobOrderId,
+      title,
+      message,
+      is_read: false,
+      created_at: now,
+    }));
+
+  if (rows.length === 0) return;
+
+  const { error: insertError } = await supabase.from('notifications').insert(rows);
+  if (insertError) console.warn('Failed to notify admins', insertError);
 }
 
 module.exports = {
@@ -400,16 +405,14 @@ module.exports = {
                   const itemName = d.item_name || '';
                   const minimumStock = Number(d.minimum_stock ?? 0);
 
-                  // IMPORTANT: Use the real remaining stock from DB (after RPC deduction)
-                  const { data: freshItem } = await supabase
-                    .from('inventory_items')
-                    .select('id, current_stock, item_name, unit')
-                    .eq('id', d.inventory_item_id)
-                    .single();
-
-                  const actualStock = Number(freshItem?.current_stock ?? d.new_stock ?? 0);
-                  const actualUnit = freshItem?.unit || unit;
-                  const actualItemName = freshItem?.item_name || itemName;
+                  // new_stock / unit / item_name come straight off the row the
+                  // compare-and-swap update returned, so they are already the
+                  // authoritative post-deduction values. This used to re-read
+                  // each item from the DB inside the loop — one extra round
+                  // trip per affected item, for data we were handed.
+                  const actualStock = Number(d.new_stock ?? 0);
+                  const actualUnit = unit;
+                  const actualItemName = itemName;
 
                   // STOCK DEDUCTED notification for this JO (job_order_id = generated JO id)
                   if (quantityUsed > 0) {
@@ -455,8 +458,11 @@ module.exports = {
                 }
 
                 if (notificationsToInsert.length > 0) {
-                  const insertPromises = notificationsToInsert.map((n) => supabase.from('notifications').insert(n));
-                  await Promise.all(insertPromises);
+                  // One insert for the whole batch. This was a separate HTTP
+                  // round trip per notification row, and the row count grows
+                  // with (inventory users x affected items).
+                  const { error: notifyError } = await supabase.from('notifications').insert(notificationsToInsert);
+                  if (notifyError) console.warn('Failed to insert inventory notifications', notifyError);
                 }
               }
           }
@@ -628,14 +634,24 @@ module.exports = {
         return res.status(400).json({ error: 'Only sent job orders can be marked as processing' });
       }
 
-      const { data, error } = await supabase
+      // The status check above and this write were separate statements, so two
+      // concurrent requests could both see 'sent' and both proceed. Matching on
+      // the expected status makes the transition atomic: the loser updates zero
+      // rows instead of re-applying the change.
+      const { data: updatedRows, error } = await supabase
         .from('job_orders')
         .update({ status: 'processing' })
         .eq('id', id)
-        .select('*')
-        .single();
+        .eq('status', 'sent')
+        .select('*');
 
       if (error) return res.status(500).json({ error: error.message || error });
+
+      if (!Array.isArray(updatedRows) || updatedRows.length === 0) {
+        return res.status(409).json({ error: 'This job order was already updated. Please refresh.' });
+      }
+
+      const data = updatedRows[0];
 
       await supabase.from('activity_logs').insert({
         user_id: req.user.id,
