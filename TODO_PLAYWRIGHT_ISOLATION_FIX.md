@@ -1,5 +1,7 @@
-## TODO: Fix Playwright admin.spec.js syntax error
+# Fix Playwright admin.spec.js syntax error — RESOLVED 2026-09-23
 
-- [ ] Edit `frontend/tests/admin.spec.js` to remove/move misplaced top-level `await` block (currently outside any `test(...)`).
-- [ ] Verify `npm run test:admin` passes syntax/parsing stage.
+- [x] Remove/move the misplaced top-level `await` block in `frontend/tests/admin.spec.js`.
+- [x] Verify the file passes the syntax/parsing stage.
 
+`node --check frontend/tests/admin.spec.js` is clean and the admin project runs as
+part of the full suite (31/31 passing). No misplaced top-level `await` remains.
