@@ -5,6 +5,7 @@ const multer = require('multer');
 const supabase = require('../lib/supabase');
 const { authMiddleware } = require('../middleware/auth');
 const { requireAnyRole } = require('../middleware/roleMiddleware');
+const { joNumberLimiter, uploadLimiter } = require('../middleware/rateLimit');
 
 function disallowInventory(req, res, next) {
   if (req.user?.role === 'inventory') return res.status(403).json({ error: 'Forbidden' });
@@ -13,7 +14,48 @@ function disallowInventory(req, res, next) {
 const router = express.Router();
 
 const SEQ_FILE = path.join(__dirname, '..', 'jo-sequence.json');
-const upload = multer({ storage: multer.memoryStorage() });
+// 5MB matches the limit the frontend already advertises. Without `limits` a
+// single large upload is buffered into RAM unbounded, which can exhaust the
+// process; and the type check previously ran only AFTER the whole file had
+// been read, so a rejected file still cost full memory and bandwidth.
+const MAX_PROOF_BYTES = Number(process.env.MAX_PROOF_UPLOAD_BYTES) || 5 * 1024 * 1024;
+const ALLOWED_PROOF_TYPES = ['image/jpeg', 'image/png', 'application/pdf'];
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_PROOF_BYTES, files: 1, fields: 10 },
+  fileFilter: (req, file, cb) => {
+    if (!ALLOWED_PROOF_TYPES.includes(file.mimetype)) {
+      const err = new Error('Invalid file type');
+      err.code = 'INVALID_FILE_TYPE';
+      return cb(err);
+    }
+    return cb(null, true);
+  },
+});
+
+// multer rejects by passing an error to next(), which would otherwise fall
+// through to Express's default HTML error page with a 500. Translate the cases
+// a client can actually cause into clean JSON.
+function handleProofUpload(req, res, next) {
+  upload.single('file')(req, res, (err) => {
+    if (!err) return next();
+
+    if (err.code === 'INVALID_FILE_TYPE') {
+      return res.status(400).json({ error: 'Invalid file type. Only JPG, PNG and PDF are allowed.' });
+    }
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      const mb = Math.floor(MAX_PROOF_BYTES / (1024 * 1024));
+      return res.status(413).json({ error: `File too large. Maximum size is ${mb}MB.` });
+    }
+    if (err.code === 'LIMIT_FILE_COUNT' || err.code === 'LIMIT_UNEXPECTED_FILE') {
+      return res.status(400).json({ error: 'Only one proof file may be uploaded.' });
+    }
+
+    console.error('Proof upload failed:', err);
+    return res.status(400).json({ error: 'Upload failed. Please try again.' });
+  });
+}
 
 function resolveStoragePath(proofFile) {
   if (!proofFile) return null;
@@ -80,7 +122,7 @@ function generateJoNumberFileBacked() {
   return `JO-${data.year}-${seq}`;
 }
 
-router.post('/generate', authMiddleware, disallowInventory, async (req, res) => {
+router.post('/generate', authMiddleware, disallowInventory, joNumberLimiter, async (req, res) => {
   try {
     const rpcResult = await generateJoNumberViaRpc();
     const rpcJoNumber = normalizeRpcJoNumber(rpcResult);
@@ -118,13 +160,8 @@ router.get('/next-number', authMiddleware, disallowInventory, async (req, res) =
   }
 });
 
-router.post('/upload-proof', authMiddleware, disallowInventory, requireAnyRole(['admin', 'technician']), upload.single('file'), async (req, res) => {
+router.post('/upload-proof', authMiddleware, disallowInventory, requireAnyRole(['admin', 'technician']), uploadLimiter, handleProofUpload, async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-  // Validate MIME types
-  const allowed = ['image/jpeg', 'image/png', 'application/pdf'];
-  if (!allowed.includes(req.file.mimetype)) {
-    return res.status(400).json({ error: 'Invalid file type' });
-  }
 
   const bucket = 'signed-jo-proofs';
   const jobOrderId = req.body?.jobOrderId || 'unknown-job-order';
