@@ -619,26 +619,18 @@ export default function JOListPage({
                     {actionLoadingId === row.id ? 'Submitting…' : 'Submit for Approval'}
                   </ActionItem>
                 ) : (
-                  <>
-                    <ActionItem
-                      onClick={() => {
-                        setOpen(false)
-                        openProofModal(row)
-                      }}
-                      ariaLabel="Re-upload Proof"
-                    >
-                      Re-upload Proof
-                    </ActionItem>
-                    <ActionItem
-                      onClick={() => {
-                        setOpen(false)
-                        handleSubmitForApproval(row.id)
-                      }}
-                      ariaLabel="Submit for Approval"
-                    >
-                      {actionLoadingId === row.id ? 'Submitting…' : 'Submit for Approval'}
-                    </ActionItem>
-                  </>
+                  // A rejected JO has to get fresh proof before it can go back
+                  // to the admin — offering Submit here sent the same rejected
+                  // proof round again.
+                  <ActionItem
+                    onClick={() => {
+                      setOpen(false)
+                      openProofModal(row)
+                    }}
+                    ariaLabel="Re-upload Proof"
+                  >
+                    Re-upload Proof
+                  </ActionItem>
                 )
               ) : null}
             </div>
@@ -709,7 +701,6 @@ export default function JOListPage({
     }
 
     if (status === 'rejected') {
-      const rejectedAt = new Date(row?.rejected_at || row?.updated_at || 0).getTime()
       if (hasProofAfterRejection) {
         return (
           <div className="flex min-w-max flex-nowrap items-center gap-2">
@@ -723,15 +714,13 @@ export default function JOListPage({
         )
       }
 
+      // Re-upload only: Submit for Approval reappears once the new proof is
+      // saved (hasProofAfterRejection above).
       return (
         <div className="flex min-w-max flex-nowrap items-center gap-2">
           {pdfActions}
           <TableButton tone="primary" disabled={proofLoading || actionLoadingId === row.id} onClick={() => openProofModal(row)}>
               Re-upload Proof
-          </TableButton>
-          <TableButton tone="primary" disabled={actionLoadingId === row.id} onClick={() => handleSubmitForApproval(row.id)}>
-            <span className="lg:hidden">Submit</span>
-            <span className="hidden lg:inline">Submit for Approval</span>
           </TableButton>
         </div>
       )
