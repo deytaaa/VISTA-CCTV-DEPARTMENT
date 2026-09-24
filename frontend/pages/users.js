@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 import ProtectedRoute from '../components/ProtectedRoute'
 import Layout from '../components/layout/Layout'
 import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/supabaseClient'
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || ''
 

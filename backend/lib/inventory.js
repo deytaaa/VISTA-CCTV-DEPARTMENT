@@ -213,7 +213,6 @@ async function deductInventoryForJobOrder({
     // erased the other's deduction.
     const updatedItem = await deductWithCompareAndSwap(match, allowInsufficientStock)
 
-    console.log(`[inventory] Stock updated successfully: ${match.item_name} is now ${updatedItem.current_stock} ${updatedItem.unit}`)
 
     // 2) Record the transaction for audit/history purposes.
     const { data: txn, error: txnError } = await supabase
@@ -256,7 +255,6 @@ async function deductInventoryForJobOrder({
 }
 
 module.exports = {
-  normalizeName,
   previewInventoryUsage,
   deductInventoryForJobOrder,
 }

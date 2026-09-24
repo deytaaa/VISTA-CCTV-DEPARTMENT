@@ -359,11 +359,8 @@ module.exports = {
       if (status === 'sent') {
         try {
           if (Array.isArray(payload.items) && payload.items.length > 0) {
-            console.log('[jobOrderController.create] status=sent, starting inventory deduct + notifications');
-            console.log('[jobOrderController.create] jobOrderId=', jobOrderId, 'joNumber=', created.jo_number, 'performedBy=', req.user?.id || null);
 
             const items = payload.items;
-            console.log('[jobOrderController] items being sent to deduction:', JSON.stringify(items, null, 2));
 
             const inventoryResult = await deductInventoryForJobOrder({
               items,
@@ -373,15 +370,8 @@ module.exports = {
               allowInsufficientStock: Boolean(payload.allow_insufficient_stock),
             });
 
-            console.log('[jobOrderController] inventoryResult.shortages:', JSON.stringify(inventoryResult.shortages, null, 2));
-            console.log('[jobOrderController] inventoryResult.deductions:', JSON.stringify(inventoryResult.deductions, null, 2));
-            console.log('[jobOrderController] inventoryResult.transactions:', JSON.stringify(inventoryResult.transactions, null, 2));
 
-
-            console.log('[jobOrderController.create] inventoryResult keys=', inventoryResult ? Object.keys(inventoryResult) : inventoryResult);
             const deductions = Array.isArray(inventoryResult?.deductions) ? inventoryResult.deductions : [];
-            console.log('[jobOrderController.create] deductions.length=', deductions.length);
-            if (deductions.length > 0) console.log('[jobOrderController.create] deductions.sample=', deductions[0]);
 
               // Inventory notifications (per affected item)
               const { data: inventoryUsers, error: invUserErr } = await supabase
@@ -389,12 +379,10 @@ module.exports = {
                 .select('id')
                 .eq('role', 'inventory');
 
-              console.log('[jobOrderController.create] inventoryUsers count=', Array.isArray(inventoryUsers) ? inventoryUsers.length : null, 'invUserErr=', invUserErr);
 
               if (!invUserErr && Array.isArray(inventoryUsers) && inventoryUsers.length > 0) {
                 const notificationsToInsert = [];
                 const inventoryUserIds = inventoryUsers.map((u) => u.id).filter(Boolean);
-                console.log('[jobOrderController.create] inventoryUserIds=', inventoryUserIds);
 
                 const stockDeductedDeductions = Array.isArray(deductions)
                   ? deductions.filter((d) => Number(d?.quantity_used ?? 0) > 0)

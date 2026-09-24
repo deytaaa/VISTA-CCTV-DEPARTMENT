@@ -98,10 +98,6 @@ export default function AdminDashboard() {
 
         // Debug: surface response status and payload for troubleshooting
         // Visible in browser devtools console when dashboard loads
-        // eslint-disable-next-line no-console
-        console.debug('AdminDashboard: /api/job-orders', jobOrdersResponse.status, jobOrdersPayload)
-        // eslint-disable-next-line no-console
-        console.debug('AdminDashboard: /api/logs', logsResponse.status, logsPayload)
 
         if (jobOrdersResponse.status === 401 || logsResponse.status === 401) {
           if (typeof window !== 'undefined') window.location.href = '/login'

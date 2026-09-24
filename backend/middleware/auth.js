@@ -68,12 +68,6 @@ function writeCache(key, context, token) {
   sessionCache.set(key, { context, expiresAt });
 }
 
-// Exposed so a password reset / role change handler can drop a session
-// immediately instead of waiting out the TTL.
-function invalidateSession(token) {
-  if (token) sessionCache.delete(cacheKey(token));
-}
-
 // Admin actions target a user id, not that user's bearer token, so drop every
 // cached session belonging to them. NOTE: the cache is per-process, so on a
 // multi-instance deployment other instances still age out on the TTL.
@@ -85,10 +79,6 @@ function invalidateUser(userId) {
       sessionCache.delete(key);
     }
   }
-}
-
-function clearSessionCache() {
-  sessionCache.clear();
 }
 
 async function resolveSession(token) {
@@ -168,12 +158,4 @@ async function authMiddleware(req, res, next) {
   }
 }
 
-function requireRole(role) {
-  return (req, res, next) => {
-    if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
-    if (req.user.role !== role) return res.status(403).json({ error: 'Forbidden' });
-    return next();
-  };
-}
-
-module.exports = { authMiddleware, requireRole, invalidateSession, invalidateUser, clearSessionCache };
+module.exports = { authMiddleware, invalidateUser };

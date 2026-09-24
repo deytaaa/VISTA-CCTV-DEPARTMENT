@@ -9,10 +9,6 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-export async function signInWithEmail(email, password) {
-	return supabase.auth.signInWithPassword({ email, password });
-}
-
 export async function signOut() {
 	return supabase.auth.signOut();
 }
