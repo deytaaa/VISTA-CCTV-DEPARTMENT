@@ -269,10 +269,6 @@ export default function JOListPage({
 
         const payload = await response.json()
 
-        // Debug: log response status and payload to browser console
-        // eslint-disable-next-line no-console
-        console.debug('JOListPage: /api/job-orders', response.status, payload)
-
         if (!response.ok) {
           // eslint-disable-next-line no-console
           console.error('JOListPage fetch failed', response.status, payload)
@@ -779,18 +775,9 @@ export default function JOListPage({
     setActionLoadingId(row.id)
 
     try {
-      const generateResponse = await fetch(`${API_BASE_URL}/api/jo/generate`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
-      })
-
-      const generatePayload = await generateResponse.json()
-      if (!generateResponse.ok || !generatePayload?.jo_number) {
-        throw new Error(generatePayload?.error || 'Failed to generate JO number')
-      }
-
+      // The server draws the JO number inside this update, after its own checks.
+      // Reserving one first with /api/jo/generate burned a number from the
+      // yearly sequence whenever the update below failed.
       const updateResponse = await fetch(`${API_BASE_URL}/api/job-orders/${row.id}`, {
         method: 'PUT',
         headers: {
@@ -798,9 +785,7 @@ export default function JOListPage({
           Authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
-          jo_number: generatePayload.jo_number,
           status: 'sent',
-          updated_at: new Date().toISOString(),
         }),
       })
 
