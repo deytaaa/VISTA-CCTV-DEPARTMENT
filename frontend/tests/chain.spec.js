@@ -47,7 +47,6 @@ test.describe('Full Dispatch Chain', () => {
     await expect(technicianSelect).toBeEnabled({ timeout: 10000 })
     await technicianSelect.selectOption({ index: 1 })
 
-    // Reload until inventory dropdown has real options, then pick one with sufficient stock
     let inventorySelect = adminPage
       .locator('select')
       .filter({ has: adminPage.locator('option:has-text("Select item")') })
@@ -64,7 +63,6 @@ test.describe('Full Dispatch Chain', () => {
       await adminPage.waitForLoadState('networkidle')
       await adminPage.waitForTimeout(1000)
 
-      // Re-fill fields lost on reload
       await adminPage.fill('input[placeholder*="location" i]', uniqueLocation)
       const dateInputR = adminPage.locator('input[type="date"]')
       if ((await dateInputR.count()) > 0) {
@@ -91,7 +89,6 @@ test.describe('Full Dispatch Chain', () => {
       throw new Error('Chain: inventory dropdown still empty after ' + maxReloads + ' reloads.')
     }
 
-    // Pick first item with sufficient stock
     await expect(inventorySelect).toBeEnabled({ timeout: 10000 })
     const invOptions = await inventorySelect.locator('option').all()
     let selectedGoodItem = false
@@ -128,12 +125,6 @@ test.describe('Full Dispatch Chain', () => {
     await expect(personnelNameInput).toBeVisible({ timeout: 5000 })
     await personnelNameInput.fill('Chain Test Technician')
 
-    // Capture console errors and failed network requests around the
-    // submit, since the DB confirmed a prior run displayed a JO number
-    // in this field WITHOUT the record ever being created — meaning this
-    // field reflects a client-side reserved/next-available number, not
-    // proof that the save actually succeeded. We need to see the real
-    // API response to know what happened.
     adminPage.on('console', (msg) => {
       if (msg.type() === 'error') console.log('[create-jo console error]', msg.text())
     })
@@ -170,10 +161,6 @@ test.describe('Full Dispatch Chain', () => {
       )
     }
 
-    // Read the JO number directly from the JO Number field after submit
-    // as a fallback, but PREFER the number confirmed by the actual API
-    // response body when available, since we've proven the field can
-    // display a number that was never persisted to the database.
     const joNumberLocator = adminPage.locator('text=JO Number').locator('xpath=following::input[1]')
     await expect(joNumberLocator).toBeVisible({ timeout: 30000 })
 
@@ -202,20 +189,10 @@ test.describe('Full Dispatch Chain', () => {
     ).toBeTruthy()
     console.log('Proceeding with JO number:', joNumber)
 
-    // Take a screenshot regardless of outcome so we can see exactly what
-    // the page looked like right after submission.
     await adminPage.screenshot({ path: 'test-results/debug-after-generate-jo.png', fullPage: true })
 
     await adminContext.close()
 
-    // ── STEP 2: Technician finds THIS JO and marks it Processing ──
-    // CONFIRMED BY DEVELOPER: Mark as Processing, Upload Proof, Take
-    // Photo/Choose File, Save Proof, and Submit for Approval ALL happen
-    // inline in the Job Orders table row's Actions column — there is no
-    // need to open the JO detail page (View/Download PDF) at all for this
-    // workflow. Earlier versions of this test incorrectly navigated into
-    // the detail page first, which only has Download PDF and nothing
-    // else — that's why "Upload Proof" was never found there.
     const techContext = await browser.newContext()
     const techPage = await techContext.newPage()
     await loginAs(techPage, TECHNICIAN_EMAIL, TECHNICIAN_PASSWORD)
@@ -224,13 +201,6 @@ test.describe('Full Dispatch Chain', () => {
     await techPage.waitForLoadState('networkidle')
     await expect(techPage.locator('table tbody tr').first()).toBeVisible({ timeout: 20000 })
 
-    // IMPORTANT: this must be a HARD assertion, not a silent fallback to
-    // "first row in the table". A previous version of this test fell
-    // back to testing whatever JO happened to be listed first if the
-    // newly-created one wasn't found — which means it could report
-    // "passing" while actually verifying the wrong JO and hiding a real
-    // bug. If this assertion fails, that needs to be investigated in the
-    // app, not worked around in the test.
     const jobRow = techPage.locator('table tbody tr').filter({ hasText: joNumber })
     await expect(
       jobRow,
@@ -247,14 +217,10 @@ test.describe('Full Dispatch Chain', () => {
     await expect(processingButton).toBeVisible({ timeout: 10000 })
     await processingButton.click()
 
-    // After marking Processing, the row's status cell and its available
-    // action buttons should update in place (no navigation expected).
     const processingStatusCell = jobRow.locator('td').filter({ hasText: /^processing$/i })
     await expect(processingStatusCell).toBeVisible({ timeout: 10000 })
     console.log(`Confirmed ${joNumber} status changed to Processing.`)
 
-    // ── STEP 3: Technician clicks Upload Proof (in the same row),
-    //            fills it in, saves it ──
     await techPage.screenshot({ path: 'test-results/debug-before-upload-proof.png', fullPage: true })
     const buttonsInRowAfterProcessing = await jobRow.locator('button, a').allTextContents().catch(() => [])
     console.log('Buttons/links in this row after marking Processing:', buttonsInRowAfterProcessing)
@@ -266,19 +232,12 @@ test.describe('Full Dispatch Chain', () => {
     const testFile = {
       name: 'chain-test-proof.png',
       mimeType: 'image/png',
-      // Minimal valid 1x1 PNG so the upload is a real, parseable image.
       buffer: Buffer.from(
         'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
         'base64'
       ),
     }
 
-    // Clicking "Upload Proof" likely expands an inline panel within or
-    // just below this row (Take Photo / Choose File / Remarks / Save
-    // Proof). Search within the row first, but fall back to a page-wide
-    // search in case the expanded panel renders outside the <tr> (a <tr>
-    // cannot contain block-level expanded content per HTML table rules,
-    // so this fallback is actually quite likely to be needed).
     const fileInputInRow = jobRow.locator('input[type="file"]').first()
     const fileInputInRowAttached = await fileInputInRow
       .waitFor({ state: 'attached', timeout: 3000 })
@@ -324,12 +283,6 @@ test.describe('Full Dispatch Chain', () => {
     await expect(proofSavedIndicator).toBeVisible({ timeout: 10000 })
     console.log(`Confirmed proof saved for ${joNumber}.`)
 
-    // ── STEP 4: Technician submits for approval ──
-    // Must scope to jobRow specifically — Playwright's strict mode
-    // correctly flagged that "Submit for Approval" matches 3 buttons on
-    // the page (other rows have their own copy of this button too).
-    // Without scoping, .click() would be ambiguous about which JO it
-    // actually submits.
     const submitButton = jobRow.getByRole('button', { name: /submit for approval/i })
     await expect(submitButton).toBeVisible({ timeout: 10000 })
     await submitButton.click()
@@ -353,17 +306,23 @@ test.describe('Full Dispatch Chain', () => {
     await verifyPage.goto(`${BASE_URL}/jo/approval`)
     await verifyPage.waitForLoadState('networkidle')
 
-    // Diagnose before asserting: dump what's actually on this page so we
-    // know whether it's an empty-state, a wrong-route redirect, or simply
-    // a different JO list than expected.
+    // FIXED: the old regex /no.*approval|no results|empty/i was far too
+    // loose — with no anchors, ".*"" can span across unrelated sentence
+    // fragments anywhere in the page text (e.g. the page's own subtitle
+    // "Completed JOs waiting for admin review and approval." or other
+    // incidental text containing "no" and "approval" far apart), so it
+    // could report a false "empty state detected" even when the table
+    // clearly has rows. Confirmed with the developer that the REAL,
+    // exact empty-state copy is "No pending approvals." — match that
+    // specific phrase instead of a vague pattern.
     const approvalPageText = await verifyPage.textContent('body').catch(() => '')
     console.log('Approval Queue page text (first 1000 chars):', approvalPageText?.slice(0, 1000))
     console.log('Approval Queue actual URL after navigation:', verifyPage.url())
     await verifyPage.screenshot({ path: 'test-results/debug-approval-queue.png', fullPage: true })
 
-    const emptyState = verifyPage.locator('text=/no.*approval|no results|empty/i')
+    const emptyState = verifyPage.getByText('No pending approvals.', { exact: false })
     if (await emptyState.first().isVisible().catch(() => false)) {
-      console.log('Approval Queue shows an explicit empty state — JO did not arrive here as expected.')
+      console.log('Approval Queue shows the real empty state ("No pending approvals.") — JO did not arrive here as expected.')
     }
 
     const approvalRow = verifyPage.locator('table tbody tr').filter({ hasText: joNumber })

@@ -1,7 +1,7 @@
-import { defineConfig, devices } from '@playwright/test'
+import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
-  testDir: './tests',
+  testDir: "./tests",
 
   fullyParallel: false,
   workers: 1,
@@ -9,13 +9,13 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
 
-  reporter: 'html',
+  reporter: "html",
 
   use: {
-    baseURL: process.env.BASE_URL || 'http://localhost:3000',
-    trace: 'on-first-retry',
-    screenshot: 'only-on-failure',
-    video: 'retain-on-failure',
+    baseURL: process.env.BASE_URL || "http://localhost:3000",
+    trace: "on-first-retry",
+    screenshot: "only-on-failure",
+    video: "retain-on-failure",
   },
 
   timeout: 60000,
@@ -26,30 +26,37 @@ export default defineConfig({
   projects: [
     // 1st — seeds inventory items with stock into the DB
     {
-      name: 'inventory',
-      testMatch: '**/inventory.spec.js',
-      use: { ...devices['Desktop Chrome'] },
+      name: "inventory",
+      testMatch: "**/inventory.spec.js",
+      use: { ...devices["Desktop Chrome"] },
     },
     // 2nd — needs inventory items to create a JO
     {
-      name: 'admin',
-      testMatch: '**/admin.spec.js',
-      dependencies: ['inventory'],
-      use: { ...devices['Desktop Chrome'] },
+      name: "admin",
+      testMatch: "**/admin.spec.js",
+      dependencies: ["inventory"],
+      use: { ...devices["Desktop Chrome"] },
     },
     // 3rd — chain and technician need JOs to exist
     {
-      name: 'chain-technician',
-      testMatch: ['**/chain.spec.js', '**/technician.spec.js'],
-      dependencies: ['admin'],
-      use: { ...devices['Desktop Chrome'] },
+      name: "chain-technician",
+      testMatch: ["**/chain.spec.js", "**/technician.spec.js"],
+      dependencies: ["admin"],
+      use: { ...devices["Desktop Chrome"] },
     },
-    // 4th — pdf needs a JO; auth can run anytime but runs last to be safe
+    // 4th — approval tests need JOs submitted for approval
     {
-      name: 'others',
-      testMatch: ['**/auth.spec.js', '**/pdf.spec.js'],
-      dependencies: ['chain-technician'],
-      use: { ...devices['Desktop Chrome'] },
+      name: "approval",
+      testMatch: "**/approval.spec.js",
+      dependencies: ["chain-technician"],
+      use: { ...devices["Desktop Chrome"] },
+    },
+    // 5th — pdf needs a JO; auth can run anytime but runs last to be safe
+    {
+      name: "others",
+      testMatch: ["**/auth.spec.js", "**/pdf.spec.js"],
+      dependencies: ["chain-technician"],
+      use: { ...devices["Desktop Chrome"] },
     },
   ],
-})
+});
