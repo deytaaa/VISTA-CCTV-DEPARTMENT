@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabaseClient'
+import { createCoalescer } from '../../lib/realtime'
 
 
 function formatDate(value) {
@@ -149,14 +150,23 @@ export default function NotificationDropdown() {
     loadNotifications()
     loadUnreadCount()
 
+    const refresh = createCoalescer(loadNotifications)
+
+    // A job order write can raise several notifications at once; without
+    // coalescing each one triggered its own reload of the dropdown.
     const channel = supabase
       .channel('notifications-header')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, () => {
-        loadNotifications()
-      })
+      .on(
+        'postgres_changes',
+        user?.id
+          ? { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` }
+          : { event: '*', schema: 'public', table: 'notifications' },
+        refresh,
+      )
       .subscribe()
 
     return () => {
+      refresh.cancel()
       supabase.removeChannel(channel)
     }
   }, [role, session?.access_token, user?.id])

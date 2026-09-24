@@ -6,6 +6,7 @@ import Layout from '../layout/Layout'
 import StatCard from './StatCard'
 import Link from 'next/link'
 import JOStatusBadge from '../jo/JOStatusBadge'
+import { createCoalescer } from '../../lib/realtime'
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || ''
 
@@ -101,14 +102,26 @@ export default function TechnicianDashboard() {
 
     loadDashboard()
 
+    const refresh = createCoalescer(loadDashboard)
+
+    // RLS already limits which rows reach this client, but filtering at the
+    // subscription means the events are never delivered in the first place:
+    // a technician is not woken up by every other technician's job order.
     const channel = supabase
       .channel('technician-dashboard-refresh')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'job_orders' }, () => loadDashboard())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'activity_logs' }, () => loadDashboard())
+      .on(
+        'postgres_changes',
+        user?.id
+          ? { event: '*', schema: 'public', table: 'job_orders', filter: `receiver_id=eq.${user.id}` }
+          : { event: '*', schema: 'public', table: 'job_orders' },
+        refresh,
+      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'activity_logs' }, refresh)
       .subscribe()
 
     return () => {
       mounted = false
+      refresh.cancel()
       supabase.removeChannel(channel)
     }
   }, [authLoading, session?.access_token, user?.id])

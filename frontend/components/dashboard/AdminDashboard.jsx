@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabaseClient'
 import { useEffect, useMemo, useState } from 'react'
 import StatCard from './StatCard'
 import Layout from '../layout/Layout'
+import { createCoalescer } from '../../lib/realtime'
 
 const summaryCards = [
   { key: 'total', label: 'Total JOs' },
@@ -146,18 +147,17 @@ export default function AdminDashboard() {
 
     loadDashboard()
 
+    const refresh = createCoalescer(loadDashboard)
+
     const channel = supabase
       .channel('dashboard-refresh')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'job_orders' }, () => {
-        loadDashboard()
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'activity_logs' }, () => {
-        loadDashboard()
-      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'job_orders' }, refresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'activity_logs' }, refresh)
       .subscribe()
 
     return () => {
       mounted = false
+      refresh.cancel()
       supabase.removeChannel(channel)
     }
   }, [authLoading, session?.access_token, user?.id])

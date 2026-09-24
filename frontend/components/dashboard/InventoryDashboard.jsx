@@ -5,6 +5,7 @@ import StatCard from './StatCard'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabaseClient'
 import Link from 'next/link'
+import { createCoalescer } from '../../lib/realtime'
 
 
 
@@ -65,16 +66,9 @@ export default function InventoryDashboard() {
     if (authLoading) return undefined
     if (!session?.access_token) return undefined
 
-    const channel = supabase
-      .channel('inventory-items-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'inventory_items',
-        },
-        () => {
+    // Deducting a multi-item job order changes several rows in quick
+    // succession; coalesce so that is one refresh, not one per row.
+    const refreshStats = createCoalescer(() => {
           const token = session?.access_token
           if (!token) return
 
@@ -97,11 +91,23 @@ export default function InventoryDashboard() {
               setLowStockItems(list.filter((it) => Number(it.current_stock || 0) <= Number(it.minimum_stock || 0)))
             })
             .catch(() => {})
+    })
+
+    const channel = supabase
+      .channel('inventory-items-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'inventory_items',
         },
+        refreshStats,
       )
       .subscribe()
 
     return () => {
+      refreshStats.cancel()
       supabase.removeChannel(channel)
     }
   }, [authLoading, session?.access_token])

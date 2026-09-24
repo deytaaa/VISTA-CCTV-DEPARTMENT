@@ -4,6 +4,7 @@ import ProtectedRoute from '../../components/ProtectedRoute'
 import Layout from '../../components/layout/Layout'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabaseClient'
+import { createCoalescer } from '../../lib/realtime'
 
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || ''
@@ -119,6 +120,9 @@ export default function InventoryPage() {
   useEffect(() => {
     if (!session?.access_token) return undefined
 
+    const refresh = createCoalescer(loadItems)
+
+    // Creating a job order can deduct several items in quick succession.
     const channel = supabase
       .channel('inventory-items-changes')
       .on(
@@ -128,13 +132,12 @@ export default function InventoryPage() {
           schema: 'public',
           table: 'inventory_items',
         },
-        () => {
-          loadItems()
-        },
+        refresh,
       )
       .subscribe()
 
     return () => {
+      refresh.cancel()
       supabase.removeChannel(channel)
     }
   }, [session?.access_token])
