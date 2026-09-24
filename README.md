@@ -56,6 +56,8 @@ Run in this order in the Supabase SQL editor:
 3. `backend/sql/002_remove_supervisor_role.sql`
 4. `backend/sql/003_storage_bucket.sql`
 5. `backend/sql/004_inventory.sql`
+6. `backend/sql/005_rls.sql` — **required**; enables row level security
+7. `backend/sql/006_fix_deduct_rpc_new_stock.sql`
 
 ### Soft-delete / filtering note
 If your schema migration includes the soft-delete column, confirm `job_orders.deleted_at` exists and is used by the delete flow.
@@ -130,7 +132,8 @@ Seed scripts can be overridden via env vars (see each script for `SEED_*` keys).
 - Validate storage permissions:
   - `signed-jo-proofs` must be readable (public or via signed URLs) as intended.
   - Upload policy must be restricted to the authenticated role that performs proof uploads.
-- Ensure RLS policies are correct for tables that are queried client-side (if any use client keys).
+- Run `backend/sql/005_rls.sql`. Without it the public anon key can read and
+  write every table directly through PostgREST, bypassing the API entirely.
 - Rotate any seeded default passwords immediately after initial setup.
 - Confirm that any “public read” requirements for proofs match your storage policy.
 
