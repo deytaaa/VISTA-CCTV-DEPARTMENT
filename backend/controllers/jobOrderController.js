@@ -1,6 +1,20 @@
 const supabase = require('../lib/supabase')
 const { previewInventoryUsage, deductInventoryForJobOrder } = require('../lib/inventory');
 
+// Columns on public.job_orders that a client is allowed to write via PUT.
+// Anything else in the request body (items, personnel, allow_insufficient_stock)
+// is handled separately and must never reach the UPDATE statement.
+const JOB_ORDER_UPDATABLE_COLUMNS = [
+  'jo_number',
+  'date',
+  'location',
+  'requestor_name',
+  'status',
+  'sender_id',
+  'receiver_id',
+  'rejection_remarks',
+];
+
 function normalizeRpcJoNumber(rpcResult) {
   if (!rpcResult) return null;
   if (typeof rpcResult === 'string') return rpcResult;
@@ -65,7 +79,10 @@ module.exports = {
       let query = supabase
         .from('job_orders')
         .select('*, sender:users!job_orders_sender_id_fkey(id, name, email, role), receiver:users!job_orders_receiver_id_fkey(id, name, email, role), job_order_items(*), job_order_personnel(*), completion_reports(*, completed_by_user:users!completion_reports_completed_by_fkey(id, name, email, role))', { count: 'exact' })
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        // job_orders.deleted_at is the soft-delete marker; deleted JOs must not
+        // appear in any list, count, or dashboard total.
+        .is('deleted_at', null);
 
       if (technicianReceiverId) query = query.eq('receiver_id', technicianReceiverId);
       if (status) query = query.eq('status', status);
@@ -133,6 +150,7 @@ module.exports = {
         .from('job_orders')
         .select('*, sender:users!job_orders_sender_id_fkey(id, name, email, role), receiver:users!job_orders_receiver_id_fkey(id, name, email, role), job_order_items(*), job_order_personnel(*), completion_reports(*, completed_by_user:users!completion_reports_completed_by_fkey(id, name, email, role))')
         .eq('id', id)
+        .is('deleted_at', null)
         .single();
       if (error) return res.status(404).json({ error: error.message || error });
 
@@ -485,12 +503,20 @@ module.exports = {
         }
       }
 
+      // Only real job_orders columns may be written. The request body also
+      // carries transport-only fields (items, personnel, allow_insufficient_stock)
+      // which are not columns — spreading the raw payload made PostgREST reject
+      // the whole update, so submitting a saved draft always failed.
+      const updateObj = { updated_at: new Date().toISOString() };
+      for (const column of JOB_ORDER_UPDATABLE_COLUMNS) {
+        if (Object.prototype.hasOwnProperty.call(payload, column)) {
+          updateObj[column] = payload[column];
+        }
+      }
+
       const { data, error } = await supabase
         .from('job_orders')
-        .update({
-          ...payload,
-          updated_at: new Date().toISOString(),
-        })
+        .update(updateObj)
         .eq('id', id)
         .select('*')
         .single();
