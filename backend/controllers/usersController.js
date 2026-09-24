@@ -1,4 +1,5 @@
 const supabase = require('../lib/supabase');
+const { invalidateUser } = require('../middleware/auth');
 
 function getTargetUserId(req) {
   const id = req.params?.id;
@@ -156,6 +157,9 @@ module.exports = {
 
       if (profileError) return res.status(500).json({ error: profileError.message || profileError });
 
+      // A role change must not linger behind the auth cache TTL.
+      invalidateUser(targetUserId);
+
       return res.json({ ok: true });
     } catch (err) {
       console.error(err);
@@ -180,6 +184,8 @@ module.exports = {
       });
 
       if (error) return res.status(500).json({ error: error.message || error });
+
+      invalidateUser(targetUserId);
 
       return res.json({ ok: true });
     } catch (err) {
@@ -213,6 +219,9 @@ module.exports = {
       });
       if (authError) return res.status(500).json({ error: authError.message || authError });
 
+      // Deactivation must take effect now, not on cache expiry.
+      invalidateUser(targetUserId);
+
       return res.json({ ok: true });
     } catch (err) {
       console.error(err);
@@ -236,6 +245,8 @@ module.exports = {
         ban_duration: 'none',
       });
       if (authError) return res.status(500).json({ error: authError.message || authError });
+
+      invalidateUser(targetUserId);
 
       return res.json({ ok: true });
     } catch (err) {
