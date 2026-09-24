@@ -49,7 +49,11 @@ app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
 app.use('/api', burstLimiter, sustainedLimiter);
 app.use('/api/auth/register', accountLimiter);
-app.use('/api/users', accountLimiter);
+// NOTE: the account limiter is applied per-route inside routes/users.js, not
+// across the whole /api/users prefix. Mounting it on the prefix also throttled
+// GET /api/users/technicians, which the Create JO page fetches on every load,
+// so after 40 page loads in the window the technician dropdown came back empty
+// and job order creation failed.
 app.use('/api/jo', joRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/items', itemsRoutes);
