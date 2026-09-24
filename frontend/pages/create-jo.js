@@ -548,6 +548,9 @@ export default function CreateJO() {
         ? cleanedItems.map((row, idx) => ({
             item_no: idx + 1,
             item_name: row.item_name,
+            // Carry the inventory id so the server deducts against the exact
+            // row the user picked instead of re-matching on item_name.
+            inventory_item_id: row.inventory_item_id || null,
             reference_no: row.reference_no || null,
             quantity: Number(row.quantity),
           }))
@@ -614,7 +617,7 @@ export default function CreateJO() {
   }
 
   return (
-    <ProtectedRoute allowedRoles={['admin', 'dispatcher']}>
+    <ProtectedRoute allowedRoles={['admin']}>
       <Layout title="Create Job Order">
         {toast.visible || toast.exiting ? (
           <div className="fixed right-4 top-4 z-50 w-[320px] max-w-[calc(100vw-2rem)]">

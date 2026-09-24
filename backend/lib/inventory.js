@@ -11,15 +11,31 @@ async function loadInventoryItems() {
 }
 
 function getInventoryMatches(items, inventoryItems) {
-  const inventoryMap = new Map(inventoryItems.map((item) => [normalizeName(item.item_name), item]))
+  const byId = new Map(inventoryItems.map((item) => [String(item.id), item]))
+  const byName = new Map(inventoryItems.map((item) => [normalizeName(item.item_name), item]))
   const matches = []
   const shortages = []
+  // Rows that named an item we could not resolve. Previously these were
+  // skipped in silence, so a renamed or mistyped item deducted nothing and
+  // nobody found out.
+  const unmatched = []
 
   for (const item of Array.isArray(items) ? items : []) {
-    const inventoryItem = inventoryMap.get(normalizeName(item?.item_name))
+    // Prefer the id the UI captured; fall back to name for older payloads
+    // (saved drafts) that predate inventory_item_id being sent.
+    const inventoryItem =
+      (item?.inventory_item_id ? byId.get(String(item.inventory_item_id)) : null) ||
+      byName.get(normalizeName(item?.item_name)) ||
+      null
+
     const required = Number(item?.quantity || 0)
 
-    if (!inventoryItem || !required) continue
+    if (!inventoryItem) {
+      if (item?.item_name) unmatched.push({ item_name: item.item_name, required })
+      continue
+    }
+
+    if (!required) continue
 
     const available = Number(inventoryItem.current_stock || 0)
     const shortage = available - required
@@ -43,7 +59,7 @@ function getInventoryMatches(items, inventoryItems) {
     }
   }
 
-  return { matches, shortages }
+  return { matches, shortages, unmatched }
 }
 
 async function previewInventoryUsage(items) {
@@ -51,14 +67,93 @@ async function previewInventoryUsage(items) {
   return getInventoryMatches(items, inventoryItems)
 }
 
-// REPLACED the previous supabase.rpc('deduct_inventory_for_job_order', ...)
-// call. That RPC was confirmed (via direct SQL inspection during testing)
-// to insert a row into inventory_transactions but NOT actually update
-// inventory_items.current_stock — meaning every JO created with inventory
-// items appeared to deduct successfully (no error thrown, transaction
-// logged) while the real stock number never moved. Doing the update and
-// insert directly here, with explicit error checking on each step, makes
-// failures visible instead of silent.
+const MAX_STOCK_WRITE_ATTEMPTS = 5
+
+// Decrement one item's stock safely under concurrency.
+//
+// PostgREST cannot express `current_stock = current_stock - n`, so the write
+// is guarded by matching the stock value we based the calculation on. If
+// another request changed it in between, the update matches zero rows and we
+// re-read and retry rather than clobbering their change.
+async function deductWithCompareAndSwap(match, allowInsufficientStock) {
+  let expected = match.available
+
+  for (let attempt = 1; attempt <= MAX_STOCK_WRITE_ATTEMPTS; attempt += 1) {
+    if (!allowInsufficientStock && expected < match.required) {
+      const error = new Error(
+        `${match.item_name} only has ${expected} ${match.unit} in stock but JO requires ${match.required}.`
+      )
+      error.code = 'INSUFFICIENT_STOCK'
+      error.shortages = [
+        { item_name: match.item_name, unit: match.unit, available: expected, required: match.required },
+      ]
+      throw error
+    }
+
+    const nextStock = allowInsufficientStock
+      ? Math.max(0, expected - match.required)
+      : expected - match.required
+
+    const { data: rows, error: updateError } = await supabase
+      .from('inventory_items')
+      .update({ current_stock: nextStock, updated_at: new Date().toISOString() })
+      .eq('id', match.inventory_item_id)
+      .eq('current_stock', expected)
+      .select('id, item_name, current_stock, minimum_stock, unit')
+
+    if (updateError) {
+      console.error(`[inventory] FAILED to update stock for "${match.item_name}":`, updateError.message)
+      const error = new Error(`Failed to update stock for ${match.item_name}: ${updateError.message}`)
+      error.code = 'INVENTORY_UPDATE_FAILED'
+      throw error
+    }
+
+    if (Array.isArray(rows) && rows.length === 1) {
+      console.log(
+        `[inventory] Deducted ${match.required} ${match.unit} from "${match.item_name}": ${expected} -> ${nextStock}`
+      )
+      return rows[0]
+    }
+
+    // Zero rows matched: someone else moved the stock. Re-read and retry.
+    const { data: fresh, error: readError } = await supabase
+      .from('inventory_items')
+      .select('id, item_name, current_stock, minimum_stock, unit')
+      .eq('id', match.inventory_item_id)
+      .single()
+
+    if (readError || !fresh) {
+      const error = new Error(`Failed to re-read stock for ${match.item_name}`)
+      error.code = 'INVENTORY_UPDATE_FAILED'
+      throw error
+    }
+
+    expected = Number(fresh.current_stock || 0)
+    console.warn(
+      `[inventory] Stock for "${match.item_name}" changed during deduction — retry ${attempt}/${MAX_STOCK_WRITE_ATTEMPTS} at ${expected}`
+    )
+  }
+
+  const error = new Error(
+    `Could not deduct ${match.item_name}: stock kept changing after ${MAX_STOCK_WRITE_ATTEMPTS} attempts. Please retry.`
+  )
+  error.code = 'INVENTORY_UPDATE_CONFLICT'
+  throw error
+}
+
+// Deducts stock for a job order, in JS rather than via the
+// deduct_inventory_for_job_order RPC.
+//
+// NOTE ON THE RPC: an earlier comment here claimed that RPC "does not update
+// current_stock". That is not accurate — re-reading sql/004_inventory.sql, it
+// does update stock, insert the transaction, and return shortages, all in one
+// transaction. What actually broke was the payload: the RPC resolves rows by
+// item->>'inventory_item_id', and the JO items passed to it carried only
+// item_no/item_name/reference_no/quantity, so every item hit `continue` and
+// nothing moved. The id is now sent (see create-jo.js), so the RPC is a viable
+// target again. Its own `new_stock` double-subtraction bug is fixed in
+// sql/006_fix_deduct_rpc_new_stock.sql. Note the RPC has no equivalent of the
+// duplicate-deduction guard below, so add one before switching back.
 async function deductInventoryForJobOrder({
   items,
   jobOrderId,
@@ -67,7 +162,14 @@ async function deductInventoryForJobOrder({
   allowInsufficientStock = false,
 }) {
   const inventoryItems = await loadInventoryItems()
-  const { matches, shortages } = getInventoryMatches(items, inventoryItems)
+  const { matches, shortages, unmatched } = getInventoryMatches(items, inventoryItems)
+
+  if (unmatched.length > 0) {
+    console.warn(
+      `[inventory] ${unmatched.length} JO item(s) matched no inventory record and were NOT deducted:`,
+      unmatched.map((u) => u.item_name).join(', ')
+    )
+  }
 
   if (shortages.length > 0 && !allowInsufficientStock) {
     const message = shortages
@@ -83,14 +185,6 @@ async function deductInventoryForJobOrder({
   const transactions = []
 
   for (const match of matches) {
-    const newStock = allowInsufficientStock
-      ? Math.max(0, match.available - match.required)
-      : match.available - match.required
-
-    console.log(
-      `[inventory] Deducting ${match.required} ${match.unit} from "${match.item_name}": ${match.available} -> ${newStock}`
-    )
-
     // Defensive guard against double-deduction if this function is ever
     // called twice for the same job order (e.g. a retried request) —
     // skip silently if a stock_out transaction for this exact
@@ -112,26 +206,12 @@ async function deductInventoryForJobOrder({
       continue
     }
 
-    // 1) Update the actual stock number. This is the step the old RPC
-    // silently failed to do.
-    const { data: updatedItem, error: updateError } = await supabase
-      .from('inventory_items')
-      .update({
-        current_stock: newStock,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', match.inventory_item_id)
-      .select('id, item_name, current_stock, minimum_stock, unit')
-      .single()
-
-    if (updateError) {
-      console.error(`[inventory] FAILED to update stock for "${match.item_name}":`, updateError.message)
-      // Surface this loudly rather than continuing silently — a failed
-      // stock update should not be treated as if deduction succeeded.
-      const error = new Error(`Failed to update stock for ${match.item_name}: ${updateError.message}`)
-      error.code = 'INVENTORY_UPDATE_FAILED'
-      throw error
-    }
+    // 1) Update the actual stock number, with a compare-and-swap so two
+    // job orders deducting the same item concurrently cannot lose an update.
+    // The previous version read the stock, computed an absolute value, and
+    // wrote it back unconditionally — whichever request wrote last silently
+    // erased the other's deduction.
+    const updatedItem = await deductWithCompareAndSwap(match, allowInsufficientStock)
 
     console.log(`[inventory] Stock updated successfully: ${match.item_name} is now ${updatedItem.current_stock} ${updatedItem.unit}`)
 
@@ -172,7 +252,7 @@ async function deductInventoryForJobOrder({
 
   console.log(`[inventory] Deduction complete — ${deductions.length} item(s) deducted, ${transactions.length} transaction(s) logged.`)
 
-  return { matches, shortages, deductions, transactions }
+  return { matches, shortages, deductions, transactions, unmatched }
 }
 
 module.exports = {
