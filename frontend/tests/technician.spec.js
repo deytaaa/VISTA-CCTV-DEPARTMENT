@@ -4,6 +4,15 @@ const BASE_URL = process.env.BASE_URL || 'http://localhost:3000'
 const TECHNICIAN_EMAIL = 'technician@gmail.com'
 const TECHNICIAN_PASSWORD = 'technician123'
 
+const PROOF_FILE = {
+  name: 'technician-test-proof.png',
+  mimeType: 'image/png',
+  buffer: Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+    'base64'
+  ),
+}
+
 test.describe('Technician Workflow', () => {
   test.beforeEach(async ({ page }) => {
     // Navigate to login page
@@ -106,125 +115,100 @@ test.describe('Technician Workflow', () => {
   })
 
   test('Mark as Processing → status should update to Processing', async ({ page }) => {
-    test.setTimeout(30000)
+    test.setTimeout(60000)
 
-    // Navigate to Job Orders - Sent
     await page.goto(`${BASE_URL}/jo/sent`)
     await page.waitForLoadState('networkidle')
 
-    // Get first JO row
-    const tableRows = page.locator('table tbody tr, [role="row"]')
-    const rowCount = await tableRows.count()
+    // Assert the precondition instead of skipping on it. This used to be
+    // `if (rowCount > 0)`, so the test passed silently whenever the list was
+    // empty and nothing was actually exercised.
+    const rows = page.locator('table tbody tr')
+    await expect(
+      rows.first(),
+      'Expected at least one Sent JO assigned to the technician (admin.spec creates one)',
+    ).toBeVisible({ timeout: 15000 })
 
-    if (rowCount > 0) {
-      // Click View on first row
-      const viewButton = tableRows.first().locator('a:has-text("View"), button:has-text("View")')
-      await viewButton.click()
+    const joNumber = (await rows.first().locator('td').first().textContent())?.match(/JO-\d{4}-\d{4}/)?.[0]
+    expect(joNumber, 'Could not read a JO number from the first Sent row').toBeTruthy()
 
-      // Wait for detail page
-      await page.waitForURL('**/jo/**', { timeout: 10000 })
-      await page.waitForLoadState('networkidle')
+    const processingBtn = rows.first().locator('button').filter({ hasText: /mark as processing/i }).first()
+    await expect(processingBtn).toBeVisible({ timeout: 10000 })
+    await processingBtn.click()
 
-      // Click "Mark as Processing" button
-      const processingButton = page.locator('button:has-text("Processing"), button:has-text("Mark as Processing")')
-      if ((await processingButton.count()) > 0) {
-        await processingButton.click()
-
-        // Wait for status update
-        const processingBadge = page.locator('text=Processing, [class*="badge"]:has-text("Processing")')
-        await expect(processingBadge.first()).toBeVisible({ timeout: 10000 })
-      }
-    }
+    // It leaves the Sent list and turns up under Processing.
+    await page.goto(`${BASE_URL}/jo/processing`)
+    await page.waitForLoadState('networkidle')
+    await expect(
+      page.locator('table tbody tr').filter({ hasText: joNumber }).first(),
+      `${joNumber} should appear in the Processing list`,
+    ).toBeVisible({ timeout: 15000 })
   })
 
   test('Upload proof image and add completion remarks → click Save Proof → should show success toast', async ({
     page,
   }) => {
-    test.setTimeout(30000)
+    test.setTimeout(60000)
 
-    // Navigate to Job Orders - Processing
+    // Proof is uploaded from the Job Orders table, not the JO detail page --
+    // the detail page has no upload UI. The old version drove the detail page
+    // and guarded every step, so it passed while uploading nothing at all.
     await page.goto(`${BASE_URL}/jo/processing`)
     await page.waitForLoadState('networkidle')
 
-    // Get first JO row
-    const tableRows = page.locator('table tbody tr, [role="row"]')
-    const rowCount = await tableRows.count()
+    const row = page.locator('table tbody tr').filter({ hasText: /JO-/ }).first()
+    await expect(row, 'Expected at least one Processing JO').toBeVisible({ timeout: 15000 })
 
-    if (rowCount > 0) {
-      // Click View on first row
-      const viewButton = tableRows.first().locator('a:has-text("View"), button:has-text("View")')
-      await viewButton.click()
+    const uploadBtn = row.locator('button').filter({ hasText: /upload proof/i }).first()
+    await expect(uploadBtn, 'Processing JO should offer Upload Proof').toBeVisible({ timeout: 10000 })
+    await uploadBtn.click()
 
-      // Wait for detail page
-      await page.waitForURL('**/jo/**', { timeout: 10000 })
-      await page.waitForLoadState('networkidle')
+    await expect(page.getByRole('heading', { name: /upload proof/i })).toBeVisible({ timeout: 10000 })
 
-      // Upload proof image
-      const fileInput = page.locator('input[type="file"]')
-      if ((await fileInput.count()) > 0) {
-        // Create a test image file
-        const imagePath = 'test-image.png'
-        await fileInput.first().setInputFiles({
-          name: 'test-proof.png',
-          mimeType: 'image/png',
-          buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47]),
-        })
-      }
+    // The file input is sr-only, so set it directly.
+    await page.locator('input[type="file"]').first().setInputFiles(PROOF_FILE)
 
-      // Fill in completion remarks
-      const remarksInput = page.locator('textarea, input[placeholder*="remark" i], input[placeholder*="note" i]')
-      if ((await remarksInput.count()) > 0) {
-        await remarksInput.first().fill('Work completed successfully')
-      }
+    const remarks = page.locator('textarea[placeholder="Add completion remarks"]').first()
+    await expect(remarks).toBeVisible({ timeout: 10000 })
+    await remarks.fill('Work completed successfully')
 
-      // Click Save Proof button
-      const saveProofButton = page.locator('button:has-text("Save Proof"), button:has-text("Save"), button:has-text("Submit")')
-      if ((await saveProofButton.count()) > 0) {
-        await saveProofButton.last().click()
+    await page.locator('button').filter({ hasText: /^save proof$/i }).first().click()
 
-        // Wait for success message
-        const successToast = page.locator('[role="status"], .toast-success')
-        await expect(successToast.first()).toBeVisible({ timeout: 10000 })
-      }
-    }
+    // Modal closes on success and the row now offers Submit for Approval.
+    await expect(page.getByRole('heading', { name: /upload proof/i })).toBeHidden({ timeout: 20000 })
+    await expect(
+      row.locator('button').filter({ hasText: /submit for approval/i }).first(),
+      'Saving proof should reveal Submit for Approval on the row',
+    ).toBeVisible({ timeout: 20000 })
   })
 
   test('Click Submit for Approval → status should change to For Approval', async ({ page }) => {
-    test.setTimeout(30000)
+    test.setTimeout(60000)
 
-    // Navigate to Job Orders - Processing
     await page.goto(`${BASE_URL}/jo/processing`)
     await page.waitForLoadState('networkidle')
 
-    // Get first JO row
-    const tableRows = page.locator('table tbody tr, [role="row"]')
-    const rowCount = await tableRows.count()
+    const row = page.locator('table tbody tr').filter({ hasText: /JO-/ }).first()
+    await expect(row, 'Expected at least one Processing JO').toBeVisible({ timeout: 15000 })
 
-    if (rowCount > 0) {
-      // Click View on first row
-      const viewButton = tableRows.first().locator('a:has-text("View"), button:has-text("View")')
-      await viewButton.click()
+    const joNumber = (await row.locator('td').first().textContent())?.match(/JO-\d{4}-\d{4}/)?.[0]
+    expect(joNumber, 'Could not read a JO number from the Processing row').toBeTruthy()
 
-      // Wait for detail page
-      await page.waitForURL('**/jo/**', { timeout: 10000 })
-      await page.waitForLoadState('networkidle')
+    const submitBtn = row.locator('button').filter({ hasText: /submit for approval/i }).first()
+    await expect(
+      submitBtn,
+      `${joNumber} should offer Submit for Approval (proof must be saved first)`,
+    ).toBeVisible({ timeout: 15000 })
+    await submitBtn.click()
 
-      // Click "Submit for Approval" button
-      const submitButton = page.locator('button:has-text("Submit for Approval"), button:has-text("For Approval")')
-      if ((await submitButton.count()) > 0) {
-        await submitButton.click()
+    const confirmBtn = page.locator('button').filter({ hasText: /^confirm$/i }).first()
+    await expect(confirmBtn).toBeVisible({ timeout: 10000 })
+    await confirmBtn.click()
 
-        // Confirm if modal appears
-        const confirmButton = page.locator('button:has-text("Confirm"), button:has-text("Yes"), button:has-text("Submit")')
-        if ((await confirmButton.count()) > 0) {
-          await confirmButton.last().click()
-        }
-
-        // Wait for status to change to "For Approval"
-        const approvalBadge = page.locator('text=For Approval, [class*="badge"]:has-text("For Approval")')
-        await expect(approvalBadge.first()).toBeVisible({ timeout: 10000 })
-      }
-    }
+    await expect(
+      row.getByText(/for approval/i).first(),
+      `${joNumber} should show For Approval after submitting`,
+    ).toBeVisible({ timeout: 20000 })
   })
 
   test('Go to Approved sidebar page → should only show Approved JOs', async ({ page }) => {
