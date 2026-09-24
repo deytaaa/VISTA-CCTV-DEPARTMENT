@@ -241,9 +241,22 @@ module.exports = {
       }
 
 
-      // Generate only for non-draft submissions when JO number is still missing.
-      if (!joNumber && status !== 'draft') {
+      // Stock is checked BEFORE a JO number is drawn. generate_jo_number()
+      // advances a yearly counter that is never returned, so anything that
+      // rejects the request after that point permanently burns a number and
+      // leaves a gap in the audit trail.
+      if (status === 'sent' && Array.isArray(payload.items) && payload.items.length > 0) {
+        const { shortages } = await previewInventoryUsage(payload.items);
+        if (shortages.length > 0 && !payload.allow_insufficient_stock) {
+          const message = shortages
+            .map((item) => `${item.item_name} only has ${item.available} ${item.unit} in stock but JO requires ${item.required}.`)
+            .join(' ');
+          return res.status(409).json({ error: message, shortages });
+        }
+      }
 
+      // Drawn last, once every check that could reject the request has passed.
+      if (!joNumber && status !== 'draft') {
         try {
           const { data: rpcData, error: rpcError } = await supabase.rpc('generate_jo_number');
           if (!rpcError) joNumber = normalizeRpcJoNumber(rpcData);
@@ -254,16 +267,6 @@ module.exports = {
 
       if (!joNumber && status !== 'draft') {
         return res.status(500).json({ error: 'Failed to generate JO number' });
-      }
-
-      if (status === 'sent' && Array.isArray(payload.items) && payload.items.length > 0) {
-        const { shortages } = await previewInventoryUsage(payload.items);
-        if (shortages.length > 0 && !payload.allow_insufficient_stock) {
-          const message = shortages
-            .map((item) => `${item.item_name} only has ${item.available} ${item.unit} in stock but JO requires ${item.required}.`)
-            .join(' ');
-          return res.status(409).json({ error: message, shortages });
-        }
       }
 
       const insertObj = {
@@ -517,6 +520,23 @@ module.exports = {
       for (const column of JOB_ORDER_UPDATABLE_COLUMNS) {
         if (Object.prototype.hasOwnProperty.call(payload, column)) {
           updateObj[column] = payload[column];
+        }
+      }
+
+      // A draft carries no JO number. Sending it draws one here, after the
+      // stock check above, so the client never has to reserve one up front.
+      // Guarded on the draft not already having a number so re-sending cannot
+      // renumber an existing job order.
+      if (payload.status === 'sent' && !current.jo_number && !updateObj.jo_number) {
+        try {
+          const { data: rpcData, error: rpcError } = await supabase.rpc('generate_jo_number');
+          if (!rpcError) updateObj.jo_number = normalizeRpcJoNumber(rpcData);
+        } catch (e) {
+          // fall through to the check below
+        }
+
+        if (!updateObj.jo_number) {
+          return res.status(500).json({ error: 'Failed to generate JO number' });
         }
       }
 

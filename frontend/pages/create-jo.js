@@ -524,23 +524,13 @@ export default function CreateJO() {
         }
       }
 
-      let joNumberForSubmit = null
       const isEditingDraft = Boolean(draftId)
 
-      // Generate JO number only when actually generating a JO (not on page load/drafts).
-      if (status === 'sent') {
-        const genRes = await fetch(`${base}/api/jo/generate`, {
-          method: 'POST',
-          headers,
-        })
-
-        const genPayload = await genRes.json()
-        if (!genRes.ok || !genPayload?.jo_number) {
-          throw new Error(genPayload?.error || 'Failed to generate JO number')
-        }
-
-        joNumberForSubmit = genPayload.jo_number
-      }
+      // The JO number is drawn by the server inside the create/update request,
+      // after every check that could reject it. Reserving it here in a separate
+      // /api/jo/generate call meant any later failure — a stock shortage, a
+      // validation error, a dropped connection — permanently consumed a number
+      // from the yearly sequence and left a gap in the audit trail.
 
       // Convert to NUMBER before sending the request body.
       // Only send cleaned items (no fully-empty placeholder rows, and no incomplete rows).
@@ -563,7 +553,6 @@ export default function CreateJO() {
           method: 'PUT',
           headers,
           body: JSON.stringify({
-            jo_number: status === 'sent' ? joNumberForSubmit : null,
             date,
             location,
             status,
@@ -577,7 +566,6 @@ export default function CreateJO() {
           method: 'POST',
           headers,
           body: JSON.stringify({
-            jo_number: joNumberForSubmit,
             date,
             location,
             status,
@@ -597,7 +585,7 @@ export default function CreateJO() {
         throw new Error(data?.error || 'Failed to save job order')
       }
 
-      const savedJoNumber = data?.data?.jo_number || joNumberForSubmit || ''
+      const savedJoNumber = data?.data?.jo_number || ''
       setJoNumber(savedJoNumber)
 
       if (isEditingDraft) {
