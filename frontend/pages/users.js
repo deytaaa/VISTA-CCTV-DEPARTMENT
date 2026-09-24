@@ -81,11 +81,6 @@ export default function UsersPage() {
   const [reactivateTarget, setReactivateTarget] = useState(null)
   const [reactivateSaving, setReactivateSaving] = useState(false)
 
-  const [inactiveUsers, setInactiveUsers] = useState([])
-  const [inactiveLoading, setInactiveLoading] = useState(false)
-  const [inactiveError, setInactiveError] = useState(null)
-  const [reactivateSavingId, setReactivateSavingId] = useState(null)
-
 
   const authHeaders = useMemo(() => {
     if (!session?.access_token) return {}

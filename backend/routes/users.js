@@ -16,8 +16,8 @@ router.put('/:id', authMiddleware, isAdmin, usersController.updateUser);
 router.post('/:id/reset-password', authMiddleware, isAdmin, usersController.resetPassword);
 router.delete('/:id', authMiddleware, isAdmin, usersController.deleteUser);
 
-// Admin-only inactive/deactivated user management
-router.get('/inactive', authMiddleware, isAdmin, usersController.listInactiveUsers);
+// Reactivation is driven from the main users table (which lists inactive users
+// too and filters them client-side), so no separate "inactive users" endpoint.
 router.post('/:id/reactivate', authMiddleware, isAdmin, usersController.reactivateUser);
 
 module.exports = router;

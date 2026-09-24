@@ -5,17 +5,6 @@ function getTargetUserId(req) {
   return id ? String(id) : null;
 }
 
-  function pickProfileDefaults({ id, name, email, role, is_active }) {
-    return {
-      id: id ?? null,
-      name: name ?? '',
-      email: email ?? '',
-      role: role ?? null,
-      is_active: is_active ?? true,
-    };
-  }
-
-
 module.exports = {
   // GET /api/users/technicians
   listTechnicians: async (req, res) => {
@@ -24,6 +13,9 @@ module.exports = {
         .from('users')
         .select('id, name, email')
         .eq('role', 'technician')
+        // Deactivated technicians are banned from logging in, so assigning a
+        // JO to one would strand it with nobody able to act on it.
+        .eq('is_active', true)
         .order('name', { ascending: true });
 
       if (error) return res.status(500).json({ error: error.message || error });
@@ -250,31 +242,7 @@ module.exports = {
       console.error(err);
       return res.status(500).json({ error: 'Failed to reactivate user' });
     }
-  },
-
-  // GET /api/users/inactive (admin)
-  listInactiveUsers: async (req, res) => {
-    try {
-      // Pull all active=false profiles first, then map to auth user fields.
-      const { data: profileRows, error: profileError } = await supabase
-        .from('users')
-        .select('id, name, email, role, created_at, is_active')
-        .eq('is_active', false)
-        .order('created_at', { ascending: false });
-
-      if (profileError) return res.status(500).json({ error: profileError.message || profileError });
-
-      const inactiveProfiles = Array.isArray(profileRows) ? profileRows : [];
-      const userIds = inactiveProfiles.map((p) => p.id);
-      if (userIds.length === 0) return res.json({ data: [] });
-
-      // Auth user list (for extra fields if needed later). We currently just return profiles.
-      return res.json({ data: inactiveProfiles });
-    } catch (err) {
-      console.error(err);
-      return res.status(500).json({ error: 'Failed to list inactive users' });
-    }
-  },
+  }
 };
 
 
