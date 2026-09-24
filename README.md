@@ -84,15 +84,46 @@ Seed scripts can be overridden via env vars (see each script for `SEED_*` keys).
 
 ## Environment Variables
 
+Copy the templates and fill them in. Both targets are gitignored.
+
+```bash
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env.local
+```
+
+`backend/.env.example` and `frontend/.env.example` document every variable the
+code reads, with defaults and the reason each one exists. The table below covers
+what you must not get wrong.
+
 ### Backend (`backend/.env`)
-- `SUPABASE_URL` — Supabase project URL
-- `SUPABASE_SERVICE_KEY` — Supabase service role key (server-side only)
-- `JWT_SECRET` — JWT signing secret (if you enable JWT issuance/verification)
+
+| Variable | Required | Notes |
+| --- | --- | --- |
+| `SUPABASE_URL` | yes | Supabase project URL |
+| `SUPABASE_SERVICE_KEY` | yes | Service role key. Bypasses RLS — server-side only, never in the frontend |
+| `PORT` | no | Defaults to 4000 |
+| `TRUST_PROXY` | **in production** | Set to `1` on Render. Without it every request looks like it came from the proxy, so the rate limiters bucket all users together and real users throttle each other |
+| `AUTH_CACHE_TTL_MS` | no | Session cache lifetime, default 30000. Set `0` to disable. A role change is observed up to this long after the fact on instances that did not handle the change |
+| `AUTH_CACHE_MAX_ENTRIES` | no | Default 1000 |
+| `RATE_LIMIT_BURST` | no | Per minute, default 300 |
+| `RATE_LIMIT_SUSTAINED` | no | Per 15 minutes, default 2000 |
+| `RATE_LIMIT_ACCOUNT` | no | Per 15 minutes, default 40. User writes and register only |
+| `RATE_LIMIT_JO_GENERATE` | no | Per minute, default 30 |
+| `RATE_LIMIT_UPLOAD` | no | Per 15 minutes, default 120 |
+| `MAX_PROOF_UPLOAD_BYTES` | no | Default 5242880 (5MB); keep in step with the frontend's stated limit |
+| `SEED_*`, `BACKFILL_TECHNICIAN_EMAIL` | no | Read only by the seed/backfill scripts |
 
 ### Frontend (`frontend/.env.local`)
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- `NEXT_PUBLIC_API_URL` — backend origin (example: `http://localhost:4000`)
+
+| Variable | Required | Notes |
+| --- | --- | --- |
+| `NEXT_PUBLIC_SUPABASE_URL` | yes | Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | yes | Public by design — inlined into the bundle. Its reach is governed entirely by RLS, so `005_rls.sql` must be applied |
+| `NEXT_PUBLIC_API_URL` | yes | Backend origin, e.g. `http://localhost:4000` |
+
+> `JWT_SECRET` was previously listed here. Nothing in the code reads it — the
+> backend verifies Supabase-issued tokens via `supabase.auth.getUser()` rather
+> than signing its own — so it has been removed to avoid implying it matters.
 
 ## Deployment
 
@@ -110,6 +141,9 @@ Seed scripts can be overridden via env vars (see each script for `SEED_*` keys).
    - `SUPABASE_URL`
    - `SUPABASE_SERVICE_KEY`
    - `PORT` (if required by the service)
+   - `TRUST_PROXY=1` — **required.** Render terminates TLS at a proxy, so
+     without this every request carries the proxy's IP, all users share a
+     single rate-limit bucket, and they throttle one another.
 3. Confirm backend CORS allows the deployed frontend origin (current code uses permissive `cors()`).
 
 ## Features List
